@@ -35,11 +35,14 @@ import statistics
 import openpyxl
 
 import mappings as M
+import parse_ask
+import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
 BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_ATK = os.path.join(BASE, 'data', 'raw', 'atk')
 RAW_BQK = os.path.join(BASE, 'data', 'raw', 'bqk')
+RAW_ASK = os.path.join(BASE, 'data', 'raw', 'ask')
 CURATED = os.path.join(BASE, 'data', 'curated')
 # The BQK monthly and Table 15 series are ingested through the validated parser
 # in the companion BQK repository, which reproduces the published workbooks
@@ -146,6 +149,34 @@ def register_sources(atk_years):
              path=os.path.join(RAW_BQK, 'bqk_cards.pdf'),
              source_table='Table 2; Figures 2, 4, 26, 27', pub='2025-09-01',
              start='2024-01-01', end='2024-12-31', language='en')
+    register('ASK_RETAIL', 'ASK', 'Statistikat afatshkurtra të Tregtisë me Pakicë',
+             'Short-term retail trade statistics — turnover index, monthly',
+             'https://askdata.rks-gov.net/', 'monthly',
+             'Turnover index, 2021 = 100. ASK publishes no aggregate retail total in '
+             'this table, so none is constructed; card growth is compared against '
+             'each published activity and their unweighted mean.',
+             path=os.path.join(RAW_ASK, 'retail_index.json'),
+             source_table='tab01.px', language='sq')
+    register('ASK_ENTERPRISES', 'ASK', 'Regjistri statistikor i bizneseve',
+             'Statistical business register — registered enterprises',
+             'https://askdata.rks-gov.net/', 'quarterly',
+             'Registered enterprises by municipality and activity section. A better '
+             'merchant denominator than ATK taxpayers, which count filers rather '
+             'than traders — though registration still does not imply trading or '
+             'card acceptance.',
+             path=os.path.join(RAW_ASK, 'enterprises_muni.json'),
+             source_table='tab05r.px', language='sq')
+    register('ASK_CENSUS', 'ASK', 'Regjistrimi i Popullsisë 2024',
+             'Population and Housing Census 2024 — first final results',
+             LV.POPULATION_SOURCE['url'], 'annual',
+             'Population of %s, used to normalise every absolute figure and to '
+             'compare with the euro area.' % '{:,}'.format(LV.KOSOVO_POPULATION),
+             source_table='Census 2024', language='sq')
+    register('ECB_PAYMENTS', 'ECB', 'Payments statistics',
+             LV.EURO_AREA['source'], LV.EURO_AREA['url'], 'annual',
+             'Euro-area reference for the same half-year. Figures are quoted from '
+             'the ECB release as published, never recomputed.',
+             source_table=LV.EURO_AREA['period'], language='en')
     for y in atk_years:
         register('ATK_QARKULLIMI_%d' % y, 'ATK', 'Open Data — Qarkullimi %d' % y,
                  'Të dhëna të hapura — Qarkullimi %d' % y,
@@ -942,6 +973,55 @@ def main():
     sec_year, muni_year, muni_sec_year, nat_month = sector_rollups(agg)
     geo = economic_context(muni_sec_year)
 
+    # ---- ASK, and the operational layer built on top of everything
+    retail = parse_ask.retail_index(RAW_ASK)
+    ents = parse_ask.enterprises_by_municipality(RAW_ASK)
+    ents_m = parse_ask.enterprises_monthly(RAW_ASK)
+    cmix = channel_mix_payload()
+    cards_p = cards_payload()
+    pos_default = pos_monthly('pos_rm_allcards')
+
+    lever = {
+        'cash': LV.cash_displacement(cmix),
+        'card_mix': LV.card_mix(D['payments_count'], D['payments_value']),
+        'retail_capture': LV.retail_capture(retail, pos_default),
+        'benchmarks': LV.benchmarks(pos_default, cards_p),
+        'headroom': LV.acceptance_headroom(geo, ents),
+        'emerging': LV.emerging_channels(cmix),
+    }
+
+    for name, ok, msg in [
+        ('ask_retail', retail is not None,
+         'ASK retail turnover index loaded (%s activities, to %s)'
+         % (len(retail['series']) if retail else 0,
+            max(max(s) for s in retail['series'].values()) if retail else '-')),
+        ('ask_enterprises', ents is not None,
+         'ASK business register loaded (%d municipalities, latest %s)'
+         % (len(ents['by_municipality']) if ents else 0,
+            ents['latest'] if ents else '-')),
+        ('card_mix_surfaced', lever['card_mix'] is not None,
+         'Credit/debit card payment split surfaced from BQK instrument table'),
+    ]:
+        check(name, 'ingest', 'info', ok, msg, table='raw.ask')
+
+    if lever['card_mix']:
+        a = lever['card_mix']['first']
+        b = lever['card_mix']['latest']
+        check('card_mix_trend', 'model', 'warning',
+              b['credit_share_count'] >= a['credit_share_count'],
+              'Credit-function share of card payments moved from %.1f%% to %.1f%% '
+              'of transactions between %s and %s. A falling credit share moves '
+              'acquiring margin even while volume grows.'
+              % (a['credit_share_count'] * 100, b['credit_share_count'] * 100,
+                 a['year_month'], b['year_month']),
+              table='core.fact_digital_payments')
+
+    check('instalments_unavailable', 'coverage', 'warning', False,
+          'BQK publishes no instalment or buy-now-pay-later series in any reviewed '
+          'table. Credit-function card payments are the nearest proxy and are not '
+          'the same measure; instalment volume remains internal-only.',
+          table='core.fact_digital_payments', expected='published', actual='absent')
+
     # ---- KPI registry and derived statuses
     T['kpi_registry'] = KPI_REGISTRY
     sig = market_signals('pos_rm_allcards')
@@ -958,7 +1038,12 @@ def main():
                   bqk_latest='%04d-%02d' % bqk_last, atk_latest='%04d-%02d' % atk_last,
                   atk_bqk_lag_months=lag, atk_years=years,
                   shared_year=2024,
+                  population=LV.KOSOVO_POPULATION,
                   sector_mapping_version=M.SECTOR_MAPPING_VERSION),
+        levers=lever,
+        retail_index=retail,
+        enterprises=ents,
+        enterprises_monthly=ents_m,
         definitions=T['dim_metric_definition'],
         sources=T['data_sources'],
         source_versions=T['source_versions'],
@@ -971,8 +1056,8 @@ def main():
                      ('pos_rm_allcards', 'pos_t15_domestic', 'pos_t15_allcards')},
         signals={k: market_signals(k) for k in
                  ('pos_rm_allcards', 'pos_t15_domestic', 'pos_t15_allcards')},
-        cards=cards_payload(),
-        channel_mix=channel_mix_payload(),
+        cards=cards_p,
+        channel_mix=cmix,
         geo=geo,
         sectors=T['dim_sector'],
         atk_sector_year=sec_year,
@@ -1016,6 +1101,48 @@ def main():
                        ('Average ticket', 'average_ticket_growth')]:
             v = sig.get(k)
             print('  %-18s %s' % (lab, '%+7.2f%%' % (v * 100) if v is not None else '  n/a'))
+
+    # ---- the operational read
+    cash, cm = lever['cash'], lever['card_mix']
+    cap, bm = lever['retail_capture'], lever['benchmarks']
+    print('\nOPERATIONAL LEVERS')
+    print('-' * 78)
+    if cash:
+        L = cash['latest']
+        print('  Cash pool      EUR %s withdrawn vs EUR %s on cards (%s)'
+              % ('{:,.0f}'.format(L['atm_value']), '{:,.0f}'.format(L['pos_value']),
+                 L['year_month']))
+        print('                 ratio %.2fx, was %.2fx in %s — annualised pool EUR %s'
+              % (L['ratio'], cash['first']['ratio'], cash['first']['year_month'],
+                 '{:,.0f}'.format(cash['annualised_cash_pool'])))
+        print('                 one point of it = EUR %s a year'
+              % '{:,.0f}'.format(cash['value_of_one_point']))
+    if cm:
+        a, b = cm['first'], cm['latest']
+        print('  Card mix       credit %.1f%% -> %.1f%% of transactions (%s -> %s)'
+              % (a['credit_share_count'] * 100, b['credit_share_count'] * 100,
+                 a['year_month'], b['year_month']))
+    if cap:
+        print('  Retail capture card value %+.1f%% vs retail trade %+.1f%% — '
+              'outgrew %d of %d activities'
+              % (cap['card_value_yoy'] * 100, cap['retail_mean_yoy'] * 100,
+                 cap['outgrown'], cap['of']))
+    if bm:
+        print('  Position       %s' % bm['reference'])
+        for r in bm['levels']:
+            if r['index']:
+                print('                 %-42s %7.1f vs %7.1f  (%.0f%%)'
+                      % (r['measure'], r['kosovo'], r['euro_area'], r['index'] * 100))
+        print('                 %-42s %7.0f vs %7.0f  (%.0f%%)'
+              % ('Payments per terminal per year',
+                 bm['payments_per_terminal_year'],
+                 bm['euro_area_payments_per_terminal_year'],
+                 bm['productivity_index'] * 100))
+    if lever['headroom']:
+        hr = [r for r in lever['headroom']['rows'] if r.get('terminals_to_median')]
+        if hr:
+            print('  Headroom       %s' % ', '.join(
+                '%s +%d terminals' % (r['city'], r['terminals_to_median']) for r in hr))
 
     failed = sum(1 for q in QUALITY if q['status'] == 'failed')
     blocked = sum(1 for s in T['kpi_build_status'] if s['status'] == 'BLOCKED')

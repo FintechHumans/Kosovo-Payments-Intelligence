@@ -361,17 +361,23 @@ footer.foot p{max-width:96ch;margin-bottom:6px}
 @media (max-width:900px){
   :root{--rail:0px}
   .app{grid-template-columns:1fr}
+  /* One scrolling row holds the brand and both nav groups. The rail itself is
+     the scroll container: giving each group its own overflow let the secondary
+     group claim its natural width and squeeze the primary one to nothing. */
   .rail{
-    position:sticky;top:0;height:auto;flex-direction:row;align-items:center;
-    padding:0;overflow:hidden;z-index:40;
+    position:sticky;top:0;height:auto;flex-direction:row;align-items:stretch;
+    padding:0;z-index:40;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
   }
-  .rail-brand{padding:var(--s3) var(--s4);flex:none;border-right:1px solid rgba(255,255,255,.12)}
+  .rail::-webkit-scrollbar{display:none}
+  .rail-brand{padding:var(--s3) var(--s4);flex:none;border-right:1px solid rgba(255,255,255,.12);
+    display:flex;align-items:center}
   .rail-brand .s{display:none}
   .rail-brand .m{font-size:12px;white-space:nowrap}
   .rail-group{padding:0;display:contents}
   .rail-group .label{display:none}
-  .rail-nav{flex-direction:row;overflow-x:auto;gap:0;flex:1;scrollbar-width:none}
-  .rail-nav::-webkit-scrollbar{display:none}
+  /* natural width, no nested scroller — the rail scrolls */
+  .rail-nav{flex-direction:row;gap:0;flex:none;overflow:visible}
+  .rail-nav.secondary{border-left:1px solid rgba(255,255,255,.12)}
   .rail-nav button{
     border-radius:0;padding:var(--s3) var(--s4);white-space:nowrap;min-height:48px;
     border-bottom:2px solid transparent;

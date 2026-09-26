@@ -21,19 +21,29 @@
   };
 
   const PAGES = [
-    { id: 'home',     n: '01', nav: 'Overview',          title: 'Kosovo payments market',
-      q: 'What is happening?',            group: 'primary', filters: ['period', 'universe'] },
-    { id: 'payments', n: '02', nav: 'Payment behaviour', title: 'Payment behaviour',
-      q: 'How are people paying, and what is changing?', group: 'primary', filters: ['period'] },
-    { id: 'network',  n: '03', nav: 'POS network',       title: 'The POS network',
-      q: 'How large is the network, how hard does it work, and where is it?',
+    { id: 'home',     n: '01', nav: 'Where the money is', title: 'Where the money is',
+      q: 'What is the opportunity, and which way is it moving?',
       group: 'primary', filters: ['period', 'universe'] },
-    { id: 'economy',  n: '04', nav: 'Economic context',  title: 'Economic context',
-      q: 'How does payment infrastructure compare with the economy around it?',
+    { id: 'pool',     n: '02', nav: 'Cash & capture',     title: 'Cash and capture',
+      q: 'How much spending is still cash, and are cards taking it?',
+      group: 'primary', filters: [] },
+    { id: 'mix',      n: '03', nav: 'Mix & margin',       title: 'Mix and margin',
+      q: 'What is happening to the composition behind the volume?',
+      group: 'primary', filters: [] },
+    { id: 'coverage', n: '04', nav: 'Coverage',           title: 'Coverage',
+      q: 'Where does acceptance lag the economy around it?',
       group: 'primary', filters: ['year', 'muni'] },
-    { id: 'quality',  n: '05', nav: 'Data quality',      title: 'Data quality',
-      q: 'Can I trust these numbers?',    group: 'secondary', filters: [] },
-    { id: 'method',   n: '06', nav: 'Methodology',       title: 'Methodology',
+    { id: 'position', n: '05', nav: 'Position',           title: 'Position',
+      q: 'Where does Kosovo sit against the euro area?',
+      group: 'primary', filters: [] },
+    { id: 'network',  n: '06', nav: 'POS network',        title: 'The POS network',
+      q: 'How large is the network, how hard does it work, and where is it?',
+      group: 'secondary', filters: ['period', 'universe'] },
+    { id: 'payments', n: '07', nav: 'Payment behaviour',  title: 'Payment behaviour',
+      q: 'How are people paying?', group: 'secondary', filters: ['period'] },
+    { id: 'quality',  n: '08', nav: 'Data quality',       title: 'Data quality',
+      q: 'Can I trust these numbers?', group: 'secondary', filters: [] },
+    { id: 'method',   n: '09', nav: 'Methodology',        title: 'Methodology',
       q: 'How exactly was this calculated?', group: 'secondary', filters: [] }
   ];
   const PAGE = {};
@@ -142,45 +152,71 @@
     const srcId = sourceIdFor(state.definition);
     const lead = sig && sig.usage_minus_infra_pp > 0;
 
+    const cash = DA.getCashPool();
+    const cmix = DA.getCardMix();
+    const cap = DA.getRetailCapture();
+    const bm = DA.getBenchmarks();
+    const hr = DA.getHeadroom();
+
     let h = '';
 
-    // ---- the one thing a first-time visitor should take away
-    h += '<section class="home-hero">' +
-      '<span class="label">' +
-      (sig ? 'Kosovo POS market · ' + U.monthRange(sig.compare_from.slice(0, 4) + '-01', sig.through)
-           : 'Kosovo POS market') + '</span>' +
-      '<h1>' + (sig && !U.isNil(sig.infrastructure_growth)
-        ? (lead ? 'Card usage is growing faster than the terminal network'
-                : 'The terminal network is growing faster than card usage')
-        : 'Card payments in Kosovo') + '</h1>';
-
-    if (sig && !U.isNil(sig.infrastructure_growth)) {
-      h += '<p class="lede">Over the ' + sig.months + ' months to ' +
-        U.monthLabel(sig.through) + ', transactions rose ' + U.signedPct(sig.usage_growth) +
-        ' against ' + U.signedPct(sig.infrastructure_growth) + ' for terminals — so each ' +
-        'terminal is working harder, while the average payment is getting smaller.</p>' +
+    // ---- lead with the size of the prize, not with a statistic
+    if (cash) {
+      const L = cash.latest, F = cash.first;
+      h += '<section class="home-hero">' +
+        '<span class="label">The opportunity · ' + U.monthLabel(L.year_month) + '</span>' +
+        '<h1>' + U.money(cash.annualised_cash_pool) +
+        ' a year is still withdrawn as cash</h1>' +
+        '<p class="lede">Kosovo spent ' + U.money(L.pos_value) + ' on cards in ' +
+        U.monthLabel(L.year_month) + ' and took ' + U.money(L.atm_value) +
+        ' out of ATMs — <strong>' + L.ratio.toFixed(2) + '×</strong> as much. That ratio ' +
+        'was ' + F.ratio.toFixed(2) + '× in ' + U.monthLabel(F.year_month) +
+        ', so the shift is already under way. Every percentage point of the pool that ' +
+        'moves to cards is <strong>' + U.money(cash.value_of_one_point) +
+        '</strong> of additional card turnover a year.</p>' +
         '<div class="home-figs">' +
-        fig(U.signedPct(sig.usage_growth), 'transactions', true) +
-        fig(U.signedPct(sig.infrastructure_growth), 'terminals') +
-        fig(U.signedPct(sig.productivity_growth), 'per terminal') +
-        fig(U.signedPct(sig.average_ticket_growth), 'average ticket') +
-        '</div>';
+        fig(U.money(cash.value_of_one_point), 'per point moved to cards', true) +
+        fig(L.ratio.toFixed(2) + '×', 'cash withdrawn per euro on cards') +
+        (cap ? fig(U.pp(cap.gap_pp), 'cards growing ahead of retail trade') : '') +
+        (bm ? fig(U.pct(bm.levels[0].index, 0), 'of euro-area usage per person') : '') +
+        '</div>' +
+        '<div class="home-meta"><span>' + U.esc(def.metric_name) + '</span>' +
+        '<span>·</span><span>Latest ' + U.monthLabel(cur.year_month) + '</span>' +
+        '<span>·</span><button id="home-src">How this is measured</button></div>' +
+        '</section>';
     }
 
-    h += '<div class="home-meta"><span>' + U.esc(def.metric_name) + '</span>' +
-      '<span>·</span><span>Latest ' + U.monthLabel(cur.year_month) + '</span>' +
-      '<span>·</span><button id="home-src">How this is measured</button></div>' +
-      '</section>';
-
-    // ---- three ways in
+    // ---- the levers, each sized
     h += '<div class="paths">' +
-      path('02', 'Payment behaviour', 'Where payments happen, what they are worth, and how ' +
-           'the card estate is changing.', 'payments') +
-      path('03', 'POS network', 'How many terminals, how hard each one works, and where they ' +
-           'are concentrated.', 'network') +
-      path('04', 'Economic context', 'Terminal density against the turnover and businesses of ' +
-           'the economy around it.', 'economy') +
+      path('02', 'Cash & capture',
+        cash ? 'A ' + U.money(cash.annualised_cash_pool) + ' pool, and cards are ' +
+               'outgrowing retail trade by ' + (cap ? U.pp(cap.gap_pp) : 'a wide margin') + '.'
+             : 'How much spending is still settled in cash.', 'pool') +
+      path('03', 'Mix & margin',
+        cmix ? 'Credit share has moved ' +
+               U.pp(cmix.latest.credit_share_count - cmix.first.credit_share_count) +
+               ' — composition shifts margin even when volume grows.'
+             : 'Credit against debit, contactless, and the emerging channels.', 'mix') +
+      path('04', 'Coverage',
+        hr && hr.rows.filter(function (r) { return r.terminals_to_median; }).length
+          ? 'Three cities sit below peer density; the shortfall is about ' +
+            hr.rows.reduce(function (a, r) { return a + (r.terminals_to_median || 0); }, 0) +
+            ' terminals.'
+          : 'Where acceptance sits against the local economy.', 'coverage') +
+      path('05', 'Position',
+        bm ? 'Kosovo runs at ' + U.pct(bm.levels[0].index, 0) + ' of euro-area usage per ' +
+             'person and is growing several times faster.'
+           : 'Kosovo against the euro area.', 'position') +
       '</div>';
+
+    // ---- what public data cannot price
+    h += '<div class="notice" style="border-left-color:var(--purple)">' +
+      '<h5>What this sizes, and what it does not</h5>' +
+      '<p>Everything here measures the <strong>opportunity</strong>: how large each pool ' +
+      'is, which way it is moving, and where acceptance lags the economy. It does not ' +
+      'price it. Merchant service charges, interchange, scheme and processing fees and ' +
+      'terminal-level activity are not published by anyone, so no revenue or profit ' +
+      'figure appears in this report. Those require internal data.</p></div>';
 
     // ---- essential KPIs only
     h += '<div class="kpis">' +
@@ -571,181 +607,6 @@
   }
 
   // =====================================================================
-  // 04 — ECONOMIC CONTEXT  (sectors + opportunity)
-  // =====================================================================
-  function renderEconomy() {
-    const host = $('#page-economy');
-    const years = DA.atkYears();
-    const year = state.year || years[years.length - 1];
-    const muni = state.municipality;
-    const rows = DA.getSectorIntelligence({ year: year, municipality: muni });
-    const prev = DA.getSectorIntelligence({ year: year - 1, municipality: muni });
-    const prevBy = {};
-    prev.forEach(function (r) { prevBy[r.sector] = r; });
-    const total = rows.reduce(function (a, r) { return a + r.turnover; }, 0);
-    const byCls = {};
-    rows.forEach(function (r) { byCls[r.addressability] = (byCls[r.addressability] || 0) + r.turnover; });
-    const floor = byCls['HIGH'] || 0;
-    const ceiling = floor + (byCls['REVIEW_REQUIRED'] || 0);
-    const taxpayers = rows.reduce(function (a, r) { return a + r.taxpayers; }, 0);
-    const geo = DA.getEconomicContext();
-    const p = PAGE.economy;
-
-    let h = head(p);
-
-    h += '<div class="kpis">' +
-      U.kpiTile({ label: 'Declared turnover', value: total, display: U.money(total),
-        exact: U.exactMoney(total), foot: muni + ' · ' + year }) +
-      U.kpiTile({ label: 'Registered taxpayers', value: taxpayers,
-        display: U.compact(taxpayers), exact: U.exact(taxpayers),
-        foot: 'monthly average — not merchants' }) +
-      U.kpiTile({ id: 'addressable_turnover', label: 'Card-addressable', value: floor,
-        display: U.money(floor) + ' – ' + U.money(ceiling), small: true,
-        source: true, foot: U.pct(floor / total, 0) + ' – ' + U.pct(ceiling / total, 0) +
-          ' of turnover ' + caveat('Range, not a point', 'addressable_turnover') }) +
-      U.kpiTile({ label: 'Sectors', value: rows.length, display: String(rows.length),
-        foot: 'NACE sections' }) +
-      '</div>';
-
-    h += section('Which sectors carry the turnover', year + ' · ' + muni) +
-      '<div class="grid2" id="ec-sectors"></div>' +
-      disclosure('Why card-addressable turnover is a range',
-        '<p>ATK publishes sector only at NACE section level. Wholesale and retail are one ' +
-        'section worth about 46% of all turnover — wholesale is not a card channel, retail ' +
-        'is the most card-facing activity there is, and no split is published.</p>' +
-        '<p>Rather than invent a percentage, the floor counts only unambiguously card-facing ' +
-        'sectors and the ceiling adds the combined trade section. The classification is an ' +
-        'analytical judgement, not an ATK measure; every sector and its reasoning is listed ' +
-        'under Methodology.</p>') +
-      '</section>';
-
-    h += section('Sector detail', 'Turnover, taxpayers and growth') +
-      '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
-      '<th>Sector</th><th>Card-addressable</th><th class="n">Turnover</th>' +
-      '<th class="n">Share</th><th class="n">Taxpayers</th>' +
-      '<th class="n adv">Turnover / taxpayer</th><th class="n">Year on year</th>' +
-      '</tr></thead><tbody>' +
-      rows.slice().sort(function (a, b) { return b.turnover - a.turnover; })
-        .map(function (r) {
-          const pv = prevBy[r.sector];
-          const yoy = pv && pv.turnover ? r.turnover / pv.turnover - 1 : null;
-          return '<tr><td class="strong">' + U.esc(r.sector) + '</td>' +
-            '<td><span class="badge ' + r.addressability + '">' +
-            U.esc(r.addressability.replace(/_/g, ' ')) + '</span></td>' +
-            '<td class="n">' + U.money(r.turnover) + '</td>' +
-            '<td class="n">' + U.pct(r.turnover / total) + '</td>' +
-            '<td class="n">' + U.exact(r.taxpayers) + '</td>' +
-            '<td class="n adv">' + U.money(r.taxpayers ? r.turnover / r.taxpayers : null) + '</td>' +
-            '<td class="n">' + (yoy === null ? '—' : U.deltaSpan(yoy)) + '</td></tr>';
-        }).join('') + '</tbody></table></div></div></section>';
-
-    // ---- terminal density, with the approximation marked beside it
-    if (geo.length) {
-      h += section('Terminals against the economy',
-        'Seven cities, 2024 — the only year and places both institutions cover.') +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">' +
-        caveat('City ÷ municipality — indicative', 'pos_per_eur1m_addressable') +
-        caveat('Terminals estimated', 'pos_per_eur1m_addressable', 'est') +
-        '</div><div class="grid2" id="ec-matrix"></div>' +
-        '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
-        '<th>City</th><th class="n">Terminals (est.)</th><th class="n">Taxpayers</th>' +
-        '<th class="n">Turnover</th><th class="n">Addressable range</th>' +
-        '<th class="n">Terminals / €1m</th></tr></thead><tbody id="ec-rows">' +
-        geo.map(function (g) {
-          return '<tr class="clickable" data-city="' + U.esc(g.city) + '">' +
-            '<td class="strong">' + U.esc(g.city) + '</td>' +
-            '<td class="n">' + U.exact(g.pos_terminals) + '</td>' +
-            '<td class="n">' + U.exact(g.taxpayers) + '</td>' +
-            '<td class="n">' + U.money(g.turnover_total) + '</td>' +
-            '<td class="n">' + U.money(g.addressable_floor) + ' – ' +
-            U.money(g.addressable_ceiling) + '</td>' +
-            '<td class="n">' + (g.pos_per_eur1m_ceiling
-              ? g.pos_per_eur1m_ceiling.toFixed(1) + ' – ' +
-                (g.pos_per_eur1m_floor ? g.pos_per_eur1m_floor.toFixed(1) : '—') : '—') +
-            '</td></tr>';
-        }).join('') + '</tbody></table></div></div>' +
-        disclosure('How to read this comparison',
-          '<p>The terminal count is a BQK <em>city</em>; the turnover and taxpayer counts are ' +
-          'the same-named ATK <em>municipality</em>, which includes settlements outside the ' +
-          'city. The ratio is indicative, not like-for-like.</p>' +
-          '<p>ATK counts registered taxpayers filing in the month, not card-accepting ' +
-          'merchants, so density per taxpayer is a proxy. Quadrants describe where places ' +
-          'sit relative to each other; public data cannot establish that a low ratio is an ' +
-          'opportunity rather than a difference in how business is done locally.</p>') +
-        '</section>';
-    }
-
-    host.innerHTML = h;
-    wireKpis(host, { sourceId: 'ATK_QARKULLIMI_' + year, period: String(year),
-      rows: [['Year', String(year)], ['Scope', muni],
-             ['Entity', 'Registered taxpayers'], ['Source', 'ATK Open Data']] });
-
-    const colorOf = function (c) {
-      return c === 'HIGH' ? C.colors.pos : c === 'REVIEW_REQUIRED' ? C.colors.neg
-           : c === 'MEDIUM' ? C.colors.gold : C.colors.purpleSoft;
-    };
-    const sorted = rows.slice().sort(function (a, b) { return b.turnover - a.turnover; });
-    const sh = $('#ec-sectors', host);
-    put(sh, card('Largest sectors', year + ' · top 10'))
-      .appendChild(C.hbars(sorted.slice(0, 10).map(function (r) {
-        return { label: r.sector.length > 28 ? r.sector.slice(0, 27) + '…' : r.sector,
-          value: r.turnover, color: colorOf(r.addressability), tip: function () {
-            const pv = prevBy[r.sector];
-            return { name: r.sector, value: U.exactMoney(r.turnover),
-              delta: pv && pv.turnover ? U.signedPct(r.turnover / pv.turnover - 1) + ' YoY' : null,
-              rows: [['Share', U.pct(r.turnover / total)],
-                     ['Taxpayers', U.exact(r.taxpayers)],
-                     ['Addressable', r.addressability.replace(/_/g, ' ')],
-                     ['Year', String(year)], ['Source', 'ATK Qarkullimi']] }; } };
-      }), { fmt: function (v) { return '€' + C.short(v); }, pad: { t: 6, r: 92, b: 6, l: 190 } }));
-
-    put(sh, card('By card-addressability', year))
-      .appendChild(C.hbars(['HIGH', 'MEDIUM', 'LOW', 'REVIEW_REQUIRED']
-        .filter(function (k) { return byCls[k]; }).map(function (k) {
-          return { label: k.replace(/_/g, ' '), value: byCls[k], color: colorOf(k),
-            tip: function () {
-              return { name: k.replace(/_/g, ' '), value: U.exactMoney(byCls[k]),
-                rows: [['Share', U.pct(byCls[k] / total)], ['Year', String(year)],
-                       ['Mapping', DA.meta().sector_mapping_version]] }; } };
-        }), { fmt: function (v) { return '€' + C.short(v); }, pad: { t: 6, r: 92, b: 6, l: 160 } }));
-
-    if (geo.length) {
-      let selected = null;
-      const mh = $('#ec-matrix', host);
-      const mc = card('Turnover against terminal density', '2024 · bubble = taxpayers');
-      mh.appendChild(mc);
-      function draw() {
-        const el = $('.card-b', mc);
-        el.innerHTML = '';
-        el.appendChild(C.bubbles(geo.map(function (g) {
-          return { label: g.city, x: g.addressable_ceiling, y: g.pos_per_eur1m_ceiling || 0,
-            r: g.taxpayers, selected: g.city === selected, tip: function () {
-              return { name: g.city,
-                value: (g.pos_per_eur1m_ceiling || 0).toFixed(2) + ' terminals / €1m',
-                delta: U.money(g.addressable_ceiling) + ' addressable (ceiling)',
-                rows: [['Terminals', U.exact(g.pos_terminals) + ' (est.)'],
-                       ['Taxpayers', U.exact(g.taxpayers)],
-                       ['Floor', U.money(g.addressable_floor)],
-                       ['Grain', 'City ÷ municipality'], ['Year', '2024']] }; } };
-        }), { xLabel: 'Card-addressable turnover, ceiling', yLabel: 'Terminals per €1m',
-              xFmt: function (v) { return '€' + C.short(v); },
-              yFmt: function (v) { return v.toFixed(1); },
-              onClick: function (it) { selected = selected === it.label ? null : it.label; sync(); } }));
-      }
-      function sync() {
-        draw();
-        $$('#ec-rows tr', host).forEach(function (tr) {
-          tr.classList.toggle('sel', tr.dataset.city === selected); });
-      }
-      $$('#ec-rows tr', host).forEach(function (tr) {
-        tr.addEventListener('click', function () {
-          selected = selected === tr.dataset.city ? null : tr.dataset.city; sync(); });
-      });
-      sync();
-    }
-  }
-
-  // =====================================================================
   // 05 — DATA QUALITY
   // =====================================================================
   function renderQuality() {
@@ -946,8 +807,18 @@
   // =====================================================================
   // shell
   // =====================================================================
-  const RENDER = { home: renderHome, payments: renderPayments, network: renderNetwork,
-                   economy: renderEconomy, quality: renderQuality, method: renderMethod };
+  const OPS = window.OpsPages || {};
+  const RENDER = {
+    home: renderHome,
+    pool: function () { OPS.renderPool($('#page-pool'), state); },
+    mix: function () { OPS.renderMix($('#page-mix'), state); },
+    coverage: function () { OPS.renderCoverage($('#page-coverage'), state); },
+    position: function () { OPS.renderPosition($('#page-position'), state); },
+    network: renderNetwork,
+    payments: renderPayments,
+    quality: renderQuality,
+    method: renderMethod
+  };
 
   function show(id) {
     state.page = id;

@@ -43,7 +43,7 @@ create schema if not exists audit;
 
 create table if not exists audit.data_sources (
     source_id         text primary key,
-    institution       text not null check (institution in ('BQK','ATK')),
+    institution       text not null check (institution in ('BQK','ATK','ASK','ECB')),
     dataset_name      text not null,
     official_title    text,
     source_url        text not null,

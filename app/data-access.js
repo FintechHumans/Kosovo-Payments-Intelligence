@@ -195,6 +195,28 @@
       };
     },
 
+    // ---- operational levers ---------------------------------------------
+    /** Where the money still is: ATM withdrawals against card spend. */
+    getCashPool: function () { return (DB.levers || {}).cash || null; },
+
+    /** Credit versus debit — the mix that moves margin, not volume. */
+    getCardMix: function () { return (DB.levers || {}).card_mix || null; },
+
+    /** Is card value growing faster than retail trade itself? */
+    getRetailCapture: function () { return (DB.levers || {}).retail_capture || null; },
+
+    /** Kosovo against the euro area, on the ECB's own reference half-year. */
+    getBenchmarks: function () { return (DB.levers || {}).benchmarks || null; },
+
+    /** Where acceptance lags the local economy. */
+    getHeadroom: function () { return (DB.levers || {}).headroom || null; },
+
+    /** The small, fast channels. */
+    getEmergingChannels: function () { return (DB.levers || {}).emerging || null; },
+
+    getRetailIndex: function () { return DB.retail_index || null; },
+    getEnterprises: function () { return DB.enterprises || null; },
+
     // ---- market pulse ----------------------------------------------------
     /** 3–5 material, validated movements. Facts only. */
     getMarketPulse: function (defKey) {
