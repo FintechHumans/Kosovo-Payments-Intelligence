@@ -275,6 +275,118 @@ def acceptance_headroom(geo, enterprises):
                     'where acceptance sits relative to peers, not a target.'}
 
 
+def penetration(atk_sector_year, pos_monthly_t15, retail):
+    """The spine of the report: how much of the economy settles on a card.
+
+    This is the one series that needs all three institutions. ATK gives the
+    declared economy, BQK gives what moved across card rails, ASK gives the
+    retail base those cards are competing for. None of them publishes the
+    ratio; it only exists when they are put together.
+
+    ATK turnover is ALL declared business turnover — wholesale, B2B and
+    government contracting included — so the ratio is a floor on card
+    penetration of addressable spending, not a retail share. What matters is
+    the direction and the speed, both of which are unambiguous.
+    """
+    econ = {}
+    for r in atk_sector_year:
+        econ[r['year']] = econ.get(r['year'], 0.0) + r['turnover']
+    if not econ:
+        return None
+
+    card_n, card_v = {}, {}
+    for r in pos_monthly_t15:
+        y = int(r['year_month'][:4])
+        if r.get('tx_count'):
+            card_n[y] = card_n.get(y, 0.0) + r['tx_count']
+        if r.get('tx_value'):
+            card_v[y] = card_v.get(y, 0.0) + r['tx_value']
+
+    retail_year = {}
+    if retail:
+        for s in retail.get('series', {}).values():
+            per = {}
+            for ym, v in s.items():
+                per.setdefault(int(ym[:4]), []).append(v)
+            for y, vs in per.items():
+                if len(vs) >= 12:
+                    retail_year.setdefault(y, []).append(sum(vs) / len(vs))
+        retail_year = {y: sum(v) / len(v) for y, v in retail_year.items() if v}
+
+    years = sorted(y for y in econ if y in card_v and econ[y])
+    if len(years) < 2:
+        return None
+
+    base = years[0]
+    series = []
+    for y in years:
+        series.append({
+            'year': y,
+            'turnover': econ[y],
+            'card_count': card_n.get(y),
+            'card_value': card_v.get(y),
+            'penetration': card_v[y] / econ[y],
+            'turnover_index': econ[y] / econ[base] * 100,
+            'card_index': (card_v[y] / card_v[base] * 100) if card_v.get(base) else None,
+            'retail_index': retail_year.get(y)})
+
+    first, last = series[0], series[-1]
+    n = last['year'] - first['year']
+    econ_mult = last['turnover'] / first['turnover']
+    card_mult = last['card_value'] / first['card_value']
+    return {
+        'series': series,
+        'first': first, 'latest': last, 'years': n,
+        'economy_multiple': econ_mult,
+        'card_multiple': card_mult,
+        'card_faster_by': card_mult / econ_mult,
+        'economy_cagr': econ_mult ** (1.0 / n) - 1,
+        'card_cagr': card_mult ** (1.0 / n) - 1,
+        'penetration_first': first['penetration'],
+        'penetration_latest': last['penetration'],
+        'still_elsewhere': 1 - last['penetration'],
+        'note': 'Card value from BQK Table 15 (domestic plus foreign cards at Kosovo '
+                'POS) over ATK declared business turnover. ATK turnover includes '
+                'wholesale and B2B activity that no card could settle, so this is a '
+                'floor on penetration of addressable spending — the trend is the point, '
+                'not the level.'}
+
+
+def sector_momentum(atk_sector_year, sectors, first_year=None, last_year=None):
+    """Which parts of the economy grew, and whether a card could settle them."""
+    by = {}
+    for r in atk_sector_year:
+        by.setdefault(r['sector'], {})[r['year']] = r
+    years = sorted({r['year'] for r in atk_sector_year})
+    if len(years) < 2:
+        return None
+    a = first_year or years[0]
+    z = last_year or years[-1]
+    cls = {s['standardized_sector']: s['addressability_class'] for s in sectors}
+    rows = []
+    for name, yv in by.items():
+        if a in yv and z in yv and yv[a]['turnover'] > 0:
+            rows.append({
+                'sector': name,
+                'first': yv[a]['turnover'], 'latest': yv[z]['turnover'],
+                'growth': yv[z]['turnover'] / yv[a]['turnover'] - 1,
+                'added': yv[z]['turnover'] - yv[a]['turnover'],
+                'addressability': cls.get(name, 'REVIEW_REQUIRED'),
+                'taxpayers': yv[z].get('taxpayers')})
+    total_added = sum(r['added'] for r in rows if r['added'] > 0)
+    for r in rows:
+        r['share_of_growth'] = (r['added'] / total_added) if total_added else None
+    addressable_added = sum(r['added'] for r in rows
+                            if r['addressability'] in ('HIGH', 'REVIEW_REQUIRED')
+                            and r['added'] > 0)
+    return {'from_year': a, 'to_year': z,
+            'rows': sorted(rows, key=lambda r: -r['added']),
+            'total_added': total_added,
+            'addressable_added': addressable_added,
+            'addressable_share_of_growth': (addressable_added / total_added)
+                                           if total_added else None}
+
+
 def emerging_channels(channel_mix):
     """The small, fast channels: e-commerce and the digital wallet."""
     out = {}

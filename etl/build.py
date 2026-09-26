@@ -982,6 +982,8 @@ def main():
     pos_default = pos_monthly('pos_rm_allcards')
 
     lever = {
+        'penetration': LV.penetration(sec_year, pos_monthly('pos_t15_allcards'), retail),
+        'sector_momentum': LV.sector_momentum(sec_year, T['dim_sector']),
         'cash': LV.cash_displacement(cmix),
         'card_mix': LV.card_mix(D['payments_count'], D['payments_value']),
         'retail_capture': LV.retail_capture(retail, pos_default),
@@ -1105,6 +1107,27 @@ def main():
     # ---- the operational read
     cash, cm = lever['cash'], lever['card_mix']
     cap, bm = lever['retail_capture'], lever['benchmarks']
+    print('\nTHE ARC — the one series that needs all three institutions')
+    print('-' * 78)
+    pen = lever['penetration']
+    if pen:
+        print('  %-6s %16s %14s %12s' % ('YEAR', 'ATK TURNOVER', 'CARD VALUE', 'ON CARD'))
+        for s in pen['series']:
+            print('  %-6s %16s %14s %11.2f%%'
+                  % (s['year'], '{:,.0f}'.format(s['turnover']),
+                     '{:,.0f}'.format(s['card_value']), s['penetration'] * 100))
+        print('  economy x%.2f (CAGR %+.1f%%), cards x%.2f (CAGR %+.1f%%) over %d years'
+              % (pen['economy_multiple'], pen['economy_cagr'] * 100,
+                 pen['card_multiple'], pen['card_cagr'] * 100, pen['years']))
+        print('  cards grew %.1f times faster; %.1f%% of declared turnover still '
+              'settles elsewhere'
+              % (pen['card_faster_by'], pen['still_elsewhere'] * 100))
+    sm = lever['sector_momentum']
+    if sm:
+        print('\n  Growth %d-%d: EUR %s added, %.0f%% of it in card-addressable sectors'
+              % (sm['from_year'], sm['to_year'], '{:,.0f}'.format(sm['total_added']),
+                 (sm['addressable_share_of_growth'] or 0) * 100))
+
     print('\nOPERATIONAL LEVERS')
     print('-' * 78)
     if cash:

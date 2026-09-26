@@ -530,6 +530,289 @@
                pad: { t: 6, r: 92, b: 6, l: 160 } }));
   }
 
+  // =====================================================================
+  // PENETRATION — the spine. The only series that needs all three institutions.
+  // =====================================================================
+  function renderPenetration(host) {
+    const p = DA.getPenetration();
+    const sm = DA.getSectorMomentum();
+    const cap = DA.getRetailCapture();
+    if (!p) { host.innerHTML = U.emptyState('Not available', 'No overlapping years.'); return; }
+    const F = p.first, L = p.latest;
+
+    let h = '<header class="page-head"><h1>Penetration</h1>' +
+      '<p class="q">How much of the Kosovo economy actually settles on a card — and how ' +
+      'fast that is changing.</p></header>';
+
+    h += headline(
+      'ATK × BQK × ASK · ' + F.year + ' → ' + L.year,
+      'Card penetration has doubled, and 94% of the economy still settles elsewhere',
+      'The declared economy grew <strong>' + p.economy_multiple.toFixed(2) + '×</strong> ' +
+      'over ' + p.years + ' years. Card value grew <strong>' + p.card_multiple.toFixed(2) +
+      '×</strong> — ' + p.card_faster_by.toFixed(1) + ' times faster. So the share of ' +
+      'turnover moving across card rails rose from <strong>' + U.pct(p.penetration_first, 2) +
+      '</strong> to <strong>' + U.pct(p.penetration_latest, 2) + '</strong>. It is still ' +
+      'the smaller part of the story by a wide margin.',
+      fig(U.pct(p.penetration_latest, 2), 'of declared turnover on card, ' + L.year, true) +
+      fig(U.pct(p.still_elsewhere, 1), 'still settles some other way') +
+      fig('+' + (p.card_cagr * 100).toFixed(1) + '%', 'card value, compound annual') +
+      fig('+' + (p.economy_cagr * 100).toFixed(1) + '%', 'economy, compound annual'),
+      '<span>ATK declared turnover · BQK Table 15 card value · ASK retail index</span>' +
+      '<span>·</span><button data-src="pen">How this is built</button>');
+
+    h += sec('The two curves', 'Indexed to ' + F.year + ' = 100') +
+      '<div class="grid2" id="pen-charts"></div>' +
+      disclosure('What this ratio is, and what it is not',
+        '<p>The numerator is card value at Kosovo POS terminals from BQK Table 15. The ' +
+        'denominator is all declared business turnover from ATK — which includes ' +
+        'wholesale, B2B and government contracting, none of which a card could settle.</p>' +
+        '<p>So the level is a <strong>floor</strong> on penetration of addressable ' +
+        'spending, not a retail share. A card cannot capture 100% of it and never will. ' +
+        'What the series shows reliably is direction and speed, and both are ' +
+        'unambiguous: the ratio has roughly doubled in six years.</p>' +
+        '<p>Neither institution publishes this ratio. It exists only when the two are ' +
+        'put together, which is why it appears nowhere else.</p>') +
+      '</section>';
+
+    if (cap) {
+      h += sec('Against the shops themselves',
+        'Retail trade is the part of the economy a card competes for directly.') +
+        '<div class="kpis" style="margin-bottom:12px">' +
+        U.kpiTile({ label: 'Card payment value', value: cap.card_value_yoy,
+          display: U.signedPct(cap.card_value_yoy), foot: 'year on year · BQK' }) +
+        U.kpiTile({ label: 'Retail trade turnover', value: cap.retail_mean_yoy,
+          display: U.signedPct(cap.retail_mean_yoy),
+          foot: 'mean of ' + cap.of + ' activities · ASK' }) +
+        U.kpiTile({ label: 'Cards ahead by', value: cap.gap_pp, display: U.pp(cap.gap_pp),
+          foot: 'percentage points' }) +
+        U.kpiTile({ label: 'Activities outgrown', value: cap.outgrown,
+          display: cap.outgrown + ' of ' + cap.of, foot: 'this is displacement' }) +
+        '</div></section>';
+    }
+
+    if (sm) {
+      h += sec('Where the economy grew',
+        sm.from_year + ' → ' + sm.to_year + ' · and whether a card could settle it') +
+        '<div class="kpis" style="margin-bottom:12px">' +
+        U.kpiTile({ label: 'Turnover added', value: sm.total_added,
+          display: U.money(sm.total_added), exact: U.exactMoney(sm.total_added),
+          foot: sm.from_year + ' → ' + sm.to_year }) +
+        U.kpiTile({ label: 'In card-addressable sectors', value: sm.addressable_added,
+          display: U.money(sm.addressable_added),
+          foot: U.pct(sm.addressable_share_of_growth, 0) + ' of all growth' }) +
+        '</div><div class="card"><div class="card-b" id="pen-sectors"></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>Sector</th><th>Card-addressable</th><th class="n">' + sm.from_year + '</th>' +
+        '<th class="n">' + sm.to_year + '</th><th class="n">Growth</th>' +
+        '<th class="n">Share of growth</th></tr></thead><tbody>' +
+        sm.rows.slice(0, 12).map(function (r) {
+          return '<tr><td class="strong">' + U.esc(r.sector) + '</td>' +
+            '<td><span class="badge ' + r.addressability + '">' +
+            U.esc(r.addressability.replace(/_/g, ' ')) + '</span></td>' +
+            '<td class="n">' + U.money(r.first) + '</td>' +
+            '<td class="n">' + U.money(r.latest) + '</td>' +
+            '<td class="n">' + U.deltaSpan(r.growth) + '</td>' +
+            '<td class="n">' + U.pct(r.share_of_growth, 1) + '</td></tr>';
+        }).join('') + '</tbody></table></div></div></section>';
+    }
+
+    host.innerHTML = h;
+
+    const pc = $('#pen-charts', host);
+    put(pc, card('Economy against card value', F.year + ' = 100'))
+      .appendChild(C.line(p.series.map(function (s) {
+        return { year_month: String(s.year) + '-01', econ: s.turnover_index,
+                 card: s.card_index }; }), {
+        series: [{ key: 'econ', color: C.colors.gold, fill: false },
+                 { key: 'card', color: C.colors.purple, fill: true }],
+        labelEvery: 1, yFmt: function (v) { return v.toFixed(0); },
+        hover: function (r, i) {
+          const s = p.series[i];
+          return { name: String(s.year), value: 'Cards ' + s.card_index.toFixed(0),
+            delta: 'Economy ' + s.turnover_index.toFixed(0),
+            rows: [['Card value', U.exactMoney(s.card_value)],
+                   ['Turnover', U.exactMoney(s.turnover)],
+                   ['On card', U.pct(s.penetration, 2)]] }; } }));
+    pc.lastChild.insertAdjacentHTML('afterbegin',
+      '<div class="legend" style="padding-top:10px">' +
+      '<span><i style="background:' + C.colors.purple + '"></i>Card value</span>' +
+      '<span><i style="background:' + C.colors.gold + '"></i>Declared turnover</span></div>');
+
+    put(pc, card('Share of turnover on card', 'BQK card value ÷ ATK turnover'))
+      .appendChild(C.line(p.series.map(function (s) {
+        return { year_month: String(s.year) + '-01', pen: s.penetration }; }), {
+        series: [{ key: 'pen', color: C.colors.pos, fill: true }], labelEvery: 1,
+        yFmt: function (v) { return (v * 100).toFixed(1) + '%'; },
+        hover: function (r, i) {
+          const s = p.series[i];
+          return { name: String(s.year) + ' penetration', value: U.pct(s.penetration, 2),
+            rows: [['Card value', U.exactMoney(s.card_value)],
+                   ['Declared turnover', U.exactMoney(s.turnover)],
+                   ['Sources', 'BQK Table 15 ÷ ATK Qarkullimi']] }; } }));
+
+    if (sm) {
+      $('#pen-sectors', host).appendChild(C.hbars(
+        sm.rows.slice(0, 10).map(function (r) {
+          return { label: r.sector.length > 30 ? r.sector.slice(0, 29) + '…' : r.sector,
+            value: r.added,
+            color: r.addressability === 'HIGH' ? C.colors.pos
+                 : r.addressability === 'REVIEW_REQUIRED' ? C.colors.neg
+                 : r.addressability === 'MEDIUM' ? C.colors.gold : C.colors.purpleSoft,
+            tip: function () {
+              return { name: r.sector, value: U.exactMoney(r.added) + ' added',
+                delta: U.signedPct(r.growth) + ' since ' + sm.from_year,
+                rows: [['Card-addressable', r.addressability.replace(/_/g, ' ')],
+                       ['Share of all growth', U.pct(r.share_of_growth, 1)],
+                       ['Source', 'ATK Qarkullimi']] }; } };
+        }), { fmt: function (v) { return '€' + C.short(v); },
+              pad: { t: 6, r: 92, b: 6, l: 200 } }));
+    }
+
+    const b = $('[data-src="pen"]', host);
+    if (b) b.addEventListener('click', function () {
+      U.openDrawer('<span class="label label-gold">Source &amp; methodology</span>' +
+        '<h3>Card penetration of declared turnover</h3>' +
+        '<dl class="kv">' +
+        '<dt>Formula</dt><dd><code>BQK Table 15 card value ÷ ATK declared turnover</code></dd>' +
+        '<dt>Numerator</dt><dd>Card value at Kosovo POS, domestic plus foreign cards</dd>' +
+        '<dt>Denominator</dt><dd>All declared business turnover, ATK Qarkullimi</dd>' +
+        '<dt>Coverage</dt><dd>' + F.year + '–' + L.year + ', annual</dd>' +
+        '<dt>Institutions</dt><dd>BQK, ATK, with ASK retail as the comparison base</dd>' +
+        '<dt>Limitations</dt><dd>' + U.esc(p.note) + '</dd></dl>');
+    });
+  }
+
+  // =====================================================================
+  // CONCLUSION — what the evidence adds up to
+  // =====================================================================
+  function renderConclusion(host) {
+    const p = DA.getPenetration();
+    const cash = DA.getCashPool();
+    const cmix = DA.getCardMix();
+    const bm = DA.getBenchmarks();
+    const cap = DA.getRetailCapture();
+    const hr = DA.getHeadroom();
+
+    let h = '<header class="page-head"><h1>What this means</h1>' +
+      '<p class="q">The evidence, in order, and what it adds up to.</p></header>';
+
+    if (p) {
+      h += headline('The conclusion',
+        'Demand is not the constraint. Acceptance and mix are.',
+        'Card value is compounding at <strong>' + (p.card_cagr * 100).toFixed(1) +
+        '%</strong> a year against an economy growing <strong>' +
+        (p.economy_cagr * 100).toFixed(1) + '%</strong>. People are not waiting to be ' +
+        'persuaded to use cards — they are already switching, faster than the economy ' +
+        'is growing, and faster than retail trade itself. What limits the business is ' +
+        'where cards can be used and what each transaction is worth.',
+        fig((p.card_cagr * 100).toFixed(1) + '%', 'card value CAGR', true) +
+        fig((p.economy_cagr * 100).toFixed(1) + '%', 'economy CAGR') +
+        (bm ? fig(U.pct(bm.levels[1].index, 0), 'of euro-area terminal density') : '') +
+        (cmix ? fig(U.pp(cmix.latest.credit_share_count - cmix.first.credit_share_count),
+                    'credit share of transactions') : ''),
+        '<span>Every figure below links to the page that establishes it.</span>');
+    }
+
+    const steps = [];
+    if (p) steps.push({
+      n: '01', t: 'The economy nearly doubled',
+      d: 'ATK declared turnover grew ' + p.economy_multiple.toFixed(2) + '× between ' +
+         p.first.year + ' and ' + p.latest.year + ', reaching ' + U.money(p.latest.turnover) + '.',
+      src: 'ATK', go: 'penetration' });
+    if (p) steps.push({
+      n: '02', t: 'Card payments grew far faster',
+      d: 'Card value grew ' + p.card_multiple.toFixed(2) + '× over the same years — ' +
+         p.card_faster_by.toFixed(1) + ' times the pace of the economy.',
+      src: 'BQK', go: 'penetration' });
+    if (p) steps.push({
+      n: '03', t: 'So penetration doubled, and is still small',
+      d: U.pct(p.penetration_first, 2) + ' of declared turnover settled on card in ' +
+         p.first.year + '; ' + U.pct(p.penetration_latest, 2) + ' in ' + p.latest.year +
+         '. ' + U.pct(p.still_elsewhere, 1) + ' still settles some other way.',
+      src: 'BQK ÷ ATK', go: 'penetration' });
+    if (cap) steps.push({
+      n: '04', t: 'It is displacement, not drift',
+      d: 'Card value grew ' + U.signedPct(cap.card_value_yoy) + ' against retail trade at ' +
+         U.signedPct(cap.retail_mean_yoy) + ', outgrowing ' + cap.outgrown + ' of ' +
+         cap.of + ' published retail activities. Cards are taking share, not riding growth.',
+      src: 'BQK vs ASK', go: 'penetration' });
+    if (cash) steps.push({
+      n: '05', t: 'The pool that remains is large and measurable',
+      d: U.money(cash.annualised_cash_pool) + ' a year is still withdrawn as cash, ' +
+         cash.latest.ratio.toFixed(2) + '× card spend — down from ' +
+         cash.first.ratio.toFixed(2) + '×. Each percentage point moved is ' +
+         U.money(cash.value_of_one_point) + ' of card turnover a year.',
+      src: 'BQK', go: 'pool' });
+    if (bm) steps.push({
+      n: '06', t: 'But acceptance is thin by European standards',
+      d: 'Kosovo has ' + U.pct(bm.levels[1].index, 0) + ' of euro-area terminal density ' +
+         'per inhabitant and ' + U.pct(bm.levels[0].index, 0) + ' of its card usage per ' +
+         'person, on the ECB’s own reference half-year.',
+      src: 'BQK vs ECB', go: 'position' });
+    if (hr && hr.rows.filter(function (r) { return r.terminals_to_median; }).length) {
+      const gap = hr.rows.reduce(function (a, r) { return a + (r.terminals_to_median || 0); }, 0);
+      steps.push({
+        n: '07', t: 'And uneven within the country',
+        d: 'Three of the seven cities BQK publishes sit below peer density against their ' +
+           'own local economy — about ' + gap + ' terminals of shortfall.',
+        src: 'BQK ÷ ATK ÷ ASK', go: 'coverage' });
+    }
+    if (cmix) steps.push({
+      n: '08', t: 'While the margin mix moves the wrong way',
+      d: 'Credit-function payments fell from ' + U.pct(cmix.first.credit_share_count, 1) +
+         ' to ' + U.pct(cmix.latest.credit_share_count, 1) + ' of transactions as volume ' +
+         'grew. Composition changes what each transaction earns even when counts rise.',
+      src: 'BQK', go: 'mix' });
+
+    h += sec('The argument', 'Each step rests on a published figure');
+    h += '<div class="paths" style="grid-template-columns:1fr">' +
+      steps.map(function (s) {
+        return '<button class="path" data-go="' + s.go + '" style="min-height:0">' +
+          '<span class="n">' + s.n + ' · ' + U.esc(s.src) + '</span>' +
+          '<h3>' + U.esc(s.t) + '</h3><p>' + U.esc(s.d) + '</p>' +
+          '<span class="go">See the evidence →</span></button>';
+      }).join('') + '</div></section>';
+
+    h += sec('What follows from it', 'Where public data stops being able to help');
+    h += '<div class="grid2">' +
+      concl('Coverage, not persuasion',
+        'Demand is compounding at ' + (p ? (p.card_cagr * 100).toFixed(0) : '~25') +
+        '% a year without intervention. The measurable constraint is where a card can ' +
+        'be presented — terminal density at a quarter of euro-area levels, and uneven ' +
+        'between cities relative to their own economies.') +
+      concl('Mix, not just volume',
+        'Transaction counts are rising while the credit share falls. Two banks can grow ' +
+        'the same volume and earn differently. Public data shows the shift; only ' +
+        'internal pricing data can size what it costs.') +
+      concl('The pool is the ceiling',
+        cash ? U.money(cash.annualised_cash_pool) + ' a year still leaves ATMs. Not all ' +
+               'of it could ever settle at a till — rent, wages and transfers pass ' +
+               'through cash too — so it bounds the opportunity rather than describing it.'
+             : 'Cash withdrawals bound the opportunity from above.') +
+      concl('Where this stops',
+        'No revenue or profit figure appears anywhere in this report. Merchant service ' +
+        'charges, interchange, scheme and processing fees, terminal-level activity and ' +
+        'merchant-level performance are published by nobody. Everything here sizes the ' +
+        'opportunity; pricing it needs internal data.') +
+      '</div></section>';
+
+    host.innerHTML = h;
+    $$('.path[data-go]', host).forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (global.__gotoPage) global.__gotoPage(b.dataset.go);
+      });
+    });
+  }
+
+  function concl(t, d) {
+    return '<div class="card"><div class="card-b" style="padding-top:20px">' +
+      '<h3 style="font-size:15px;font-weight:600;margin-bottom:8px">' + U.esc(t) + '</h3>' +
+      '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.65;max-width:56ch">' +
+      U.esc(d) + '</p></div></div>';
+  }
+
   global.OpsPages = { renderPool: renderPool, renderMix: renderMix,
-                      renderPosition: renderPosition, renderCoverage: renderCoverage };
+                      renderPosition: renderPosition, renderCoverage: renderCoverage,
+                      renderPenetration: renderPenetration,
+                      renderConclusion: renderConclusion };
 })(window);

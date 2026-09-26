@@ -196,6 +196,12 @@
     },
 
     // ---- operational levers ---------------------------------------------
+    /** The spine: card value over declared turnover, all three institutions. */
+    getPenetration: function () { return (DB.levers || {}).penetration || null; },
+
+    /** Which parts of the economy grew, and whether a card could settle them. */
+    getSectorMomentum: function () { return (DB.levers || {}).sector_momentum || null; },
+
     /** Where the money still is: ATM withdrawals against card spend. */
     getCashPool: function () { return (DB.levers || {}).cash || null; },
 
