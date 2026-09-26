@@ -15,8 +15,17 @@
   'use strict';
 
   // ------------------------------------------------------------- SOURCE
+  /* Fail loudly but not fatally. Throwing here would abort this script while
+     it parses, taking every later script with it and leaving the boot overlay
+     spinning. Reporting instead lets the shell show a real error state. */
   const DB = global.KPI_DATA;
-  if (!DB) throw new Error('data.js did not load');
+  if (!DB) {
+    const msg = 'data.js did not load — the curated payload is missing or stale.';
+    if (global.__bootFail) global.__bootFail(msg);
+    if (global.console) console.error(msg);
+    global.DataAccess = null;
+    return;
+  }
   const DEFAULT_DEF = 'pos_rm_allcards';
 
   function index(list, key) {

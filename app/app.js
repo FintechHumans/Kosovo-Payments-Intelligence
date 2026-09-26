@@ -21,9 +21,12 @@
     ['methodology', '07', 'Method',     'Methodology',            'How exactly was this calculated?']
   ];
 
+  /* Resolved in init(), not here: reading from DataAccess at module scope would
+     throw during parsing if the payload were missing, before any handler could
+     show a useful error. */
   const state = {
     page: 'overview',
-    definition: DA.defaultDefinition(),
+    definition: null,
     period: null,
     comparePeriod: null,
     compareOn: false,
@@ -1008,6 +1011,8 @@
   }
 
   function init() {
+    if (!DA) throw new Error('Data layer unavailable — the payload did not load.');
+    state.definition = DA.defaultDefinition();
     const meta = DA.meta();
     const st = DA.getDataStatus();
 
@@ -1108,5 +1113,16 @@
     setTimeout(function () { $('.boot').classList.add('gone'); }, 120);
   }
 
-  document.addEventListener('DOMContentLoaded', init);
+  /* The boot overlay covers the page until init() dismisses it. If anything
+     throws on the way there, the viewer would be left staring at a loading
+     screen for good — so a failure replaces it with a state that says what
+     went wrong and how to recover, rather than hanging. */
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      init();
+    } catch (err) {
+      if (window.console) console.error('init failed', err);
+      if (window.__bootFail) window.__bootFail(err && (err.message || err));
+    }
+  });
 })();

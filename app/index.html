@@ -19,6 +19,61 @@
   </div>
 </div>
 
+<script>
+/* Installed before anything else, so it works no matter which file fails.
+
+   The overlay above covers the page until the app dismisses it. A script that
+   throws while it is still parsing — a 404 on a payload, a stale cached file —
+   never reaches DOMContentLoaded, so a handler registered inside the app would
+   never run and the viewer would sit on a loading screen indefinitely. This
+   catches that case from outside. */
+(function () {
+  var failed = false;
+  function fail(msg) {
+    if (failed) return;
+    failed = true;
+    var boot = document.querySelector('.boot');
+    if (!boot || boot.classList.contains('gone')) return;
+    boot.innerHTML =
+      '<div class="inner" style="max-width:440px;text-align:left">' +
+      '<div class="t">Dashboard failed to start</div>' +
+      '<p style="color:rgba(255,255,255,.72);font-size:13px;line-height:1.6;margin:0 0 16px">' +
+      'The page loaded but could not render. This is almost always a stale ' +
+      'cached file &mdash; a hard refresh clears it ' +
+      '(<strong>Ctrl</strong>+<strong>Shift</strong>+<strong>R</strong>, or ' +
+      '<strong>Cmd</strong>+<strong>Shift</strong>+<strong>R</strong> on a Mac).</p>' +
+      '<pre style="font-size:11px;color:#c9a84c;white-space:pre-wrap;' +
+      'word-break:break-word;margin:0 0 16px">' +
+      String(msg).replace(/[<>&]/g, '') + '</pre>' +
+      '<button onclick="location.reload(true)" style="background:#b8960c;border:0;' +
+      'color:#1a1f36;font:600 12px/1 Inter,sans-serif;letter-spacing:.1em;' +
+      'text-transform:uppercase;padding:11px 17px;cursor:pointer">Reload</button>' +
+      '</div>';
+  }
+  window.__bootFail = fail;
+
+  window.addEventListener('error', function (e) {
+    if (e && e.target && e.target.tagName === 'SCRIPT') {
+      fail('Could not load ' + (e.target.src || 'a required file'));
+    } else {
+      fail((e && e.message) || 'Unknown error');
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', function (e) {
+    fail((e && e.reason && e.reason.message) || 'Unhandled promise rejection');
+  });
+
+  /* Last resort: if nothing dismissed the overlay, say so rather than spin. */
+  setTimeout(function () {
+    var boot = document.querySelector('.boot');
+    if (boot && !boot.classList.contains('gone')) {
+      fail('The dashboard did not finish starting within 15 seconds.');
+    }
+  }, 15000);
+})();
+</script>
+
 <div class="app">
 
   <nav class="rail" aria-label="Modules">
@@ -94,7 +149,7 @@
 <script src="data.js?v=2.0"></script>
 <script src="lib.js?v=2.1"></script>
 <script src="charts.js?v=2.0"></script>
-<script src="data-access.js?v=2.0"></script>
-<script src="app.js?v=2.0"></script>
+<script src="data-access.js?v=2.2"></script>
+<script src="app.js?v=2.2"></script>
 </body>
 </html>
