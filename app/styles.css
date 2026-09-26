@@ -426,3 +426,105 @@ footer.foot p{max-width:96ch;margin-bottom:6px}
   .reveal{opacity:1;transform:none}
   .path:hover{transform:none}
 }
+
+/* ============================================================================
+   Executive summary — the default view.
+
+   Nothing to operate: no rail, no toolbar, no mode switch, no source buttons.
+   A single column that is read from the top. The analyst tool lives behind one
+   link at the end, and body.tool brings the chrome back.
+   ============================================================================ */
+body.summary .rail,
+body.summary .toolbar,
+body.summary > .app > .main > footer.foot { display:none }
+body.summary .app { grid-template-columns:1fr }
+body.summary .canvas { padding:0; max-width:none }
+body:not(.summary) #page-summary { display:none }
+
+.sum { max-width:1080px; margin:0 auto; padding:0 var(--s6) var(--s9) }
+
+.sum-open{
+  max-width:880px;margin:0 auto;padding:clamp(56px,9vw,120px) 0 clamp(40px,6vw,72px);
+  text-align:left;
+}
+.sum-eyebrow{
+  display:block;font-size:11px;font-weight:600;letter-spacing:.2em;
+  text-transform:uppercase;color:var(--gold);margin-bottom:var(--s5);
+}
+.sum-open h1{
+  font-size:clamp(32px,5.2vw,60px);font-weight:300;letter-spacing:-.035em;
+  line-height:1.04;max-width:18ch;
+}
+.sum-lede{
+  margin-top:var(--s5);font-size:clamp(16px,1.5vw,19px);line-height:1.62;
+  color:var(--ink-2);max-width:60ch;font-weight:300;
+}
+.sum-meta{
+  margin-top:var(--s6);padding-top:var(--s4);border-top:1px solid var(--rule);
+  font-size:12px;color:var(--ink-3);letter-spacing:.01em;
+}
+
+/* a step: sentence on the left, picture on the right */
+.sum-step{
+  display:grid;grid-template-columns:minmax(280px,7fr) 11fr;gap:clamp(24px,4vw,64px);
+  align-items:start;padding:clamp(40px,6vw,72px) 0;border-top:1px solid var(--rule);
+}
+.sum-text{position:sticky;top:var(--s6)}
+.sum-n{
+  display:block;font-family:var(--mono);font-size:12px;color:var(--gold);
+  letter-spacing:.16em;margin-bottom:var(--s4);
+}
+.sum-step h2{
+  font-size:clamp(21px,2.4vw,30px);font-weight:400;letter-spacing:-.024em;
+  line-height:1.16;max-width:22ch;
+}
+.sum-k{margin-top:var(--s3);font-size:15px;color:var(--ink-2);line-height:1.6;max-width:44ch}
+.sum-note{
+  margin-top:var(--s4);font-size:13px;line-height:1.6;color:var(--ink-3);
+  max-width:46ch;padding-left:var(--s4);border-left:2px solid var(--rule);
+}
+.sum-chart{background:var(--surface);border:1px solid var(--rule);padding:var(--s5)}
+.sum-legend{
+  margin-top:var(--s3);display:flex;gap:var(--s5);flex-wrap:wrap;
+  font-size:12px;color:var(--ink-3);
+}
+.sum-legend i{display:inline-block;width:12px;height:2px;margin-right:6px;vertical-align:middle}
+
+.sum-conc{
+  margin-top:clamp(40px,6vw,72px);background:var(--ink);color:#fff;
+  padding:clamp(40px,6vw,80px) clamp(28px,5vw,72px);
+}
+.sum-conc .sum-eyebrow{color:var(--gold-soft)}
+.sum-conc h2{
+  font-size:clamp(28px,4vw,46px);font-weight:300;letter-spacing:-.03em;line-height:1.08;
+}
+.sum-conc p{
+  margin-top:var(--s5);font-size:clamp(15px,1.4vw,18px);line-height:1.62;
+  color:rgba(255,255,255,.78);max-width:62ch;font-weight:300;
+}
+.sum-conc .sum-caveat{
+  margin-top:var(--s5);padding-top:var(--s4);font-size:13px;
+  color:rgba(255,255,255,.5);border-top:1px solid rgba(255,255,255,.16);
+}
+.sum-cta{
+  margin-top:var(--s6);background:var(--gold);border:0;color:var(--ink);
+  font-size:13px;font-weight:600;letter-spacing:.08em;padding:15px 24px;
+  cursor:pointer;min-height:48px;
+}
+.sum-cta:hover{background:var(--gold-soft)}
+
+/* the way back, only in tool mode */
+.back-summary{
+  display:none;background:none;border:0;color:rgba(255,255,255,.62);cursor:pointer;
+  font-size:12px;padding:var(--s3) var(--s5);text-align:left;width:100%;min-height:44px;
+}
+body.tool .back-summary{display:block}
+.back-summary:hover{color:#fff}
+
+@media (max-width:900px){
+  .sum{padding:0 var(--s4) var(--s8)}
+  .sum-step{grid-template-columns:1fr;gap:var(--s5);padding:var(--s6) 0}
+  .sum-text{position:static}
+  .sum-open{padding:var(--s7) 0 var(--s6)}
+  .sum-conc{padding:var(--s6) var(--s4)}
+}

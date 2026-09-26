@@ -982,8 +982,35 @@
     $('#status').addEventListener('click', function () { show('quality'); });
 
     const start = (location.hash || '').replace('#', '');
+    // The summary is the default. The tool is one link away, and the hash
+    // remembers which you were in.
+    const sumSection = document.createElement('section');
+    sumSection.className = 'page active sum';
+    sumSection.id = 'page-summary';
+    $('#canvas').insertBefore(sumSection, $('#canvas').firstChild);
+    if (window.Summary) window.Summary.render(sumSection);
+
+    function enterTool(page) {
+      document.body.classList.remove('summary');
+      document.body.classList.add('tool');
+      sumSection.classList.remove('active');
+      show(page || 'home');
+    }
+    function enterSummary() {
+      document.body.classList.add('summary');
+      document.body.classList.remove('tool');
+      $$('.page').forEach(function (p) { p.classList.remove('active'); });
+      sumSection.classList.add('active');
+      history.replaceState(null, '', '#summary');
+      window.scrollTo({ top: 0 });
+    }
+    window.__enterTool = enterTool;
+    window.__enterSummary = enterSummary;
+    $('#back-summary').addEventListener('click', enterSummary);
+
     window.__gotoPage = show;
-    show(PAGE[start] ? start : 'home');
+    if (start && start !== 'summary' && PAGE[start]) enterTool(start);
+    else enterSummary();
     setTimeout(function () { $('.boot').classList.add('gone'); }, 100);
   }
 

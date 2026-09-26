@@ -38,7 +38,8 @@
     o = Object.assign({
       w: 620, h: 210, pad: { t: 14, r: 16, b: 28, l: 52 },
       series: [{ key: 'value', color: C.purple, fill: true, label: '' }],
-      labelEvery: 6, yFmt: short, baseZero: false, hover: null
+      labelEvery: 6, yFmt: short, baseZero: false, hover: null,
+      xFmt: function (r) { return (r.year_month || '').slice(2); }
     }, o || {});
     const s = svg(o.w, o.h);
     const iw = o.w - o.pad.l - o.pad.r, ih = o.h - o.pad.t - o.pad.b;
@@ -95,7 +96,7 @@
     pts.forEach(function (r, i) {
       if (i % o.labelEvery !== 0 && i !== pts.length - 1) return;
       s.appendChild(el('text', { x: X(i), y: o.h - 9, 'text-anchor': 'middle' },
-        (r.year_month || '').slice(2)));
+        o.xFmt(r)));
     });
     s.appendChild(el('line', { x1: o.pad.l, x2: o.w - o.pad.r,
       y1: o.pad.t + ih, y2: o.pad.t + ih, class: 'axis' }));

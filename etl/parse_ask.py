@@ -17,6 +17,33 @@ import os
 RAW = None  # set by the caller
 
 
+# ASK labels the retail activities in Albanian and at full NACE length. The
+# report is written in English and the names appear on a chart axis, so each
+# carries a short English rendering. The published name is kept alongside it.
+RETAIL_EN = [
+    ('dyqane jo te specializuara',        'Non-specialised stores'),
+    ('dyqane jo të specializuara',       'Non-specialised stores'),
+    ('produkteve ushqimore',              'Food, drink & tobacco'),
+    ('karburantit',                       'Automotive fuel'),
+    ('informatike',                       'Computing & communications'),
+    ('pajisjeve të tjera shtëpiake',    'Household equipment'),
+    ('kulturore',                         'Culture & recreation'),
+    ('mallrave të tjerë',               'Other specialised stores'),
+    ('postes apo internetit',             'Mail order & internet'),
+    ('postes apo internetit'.replace('e', 'ë'), 'Mail order & internet'),
+    ('tezga',                             'Stalls & markets'),
+]
+
+
+def english_retail(name):
+    """Short English label for an ASK retail activity; falls back to the original."""
+    low = (name or '').lower()
+    for needle, en in RETAIL_EN:
+        if needle.lower() in low:
+            return en
+    return name
+
+
 def _labels(ds, dim):
     cat = ds['dimension'][dim]['category']
     idx, lab = cat['index'], cat.get('label', {})
@@ -50,7 +77,9 @@ def retail_index(raw_dir):
                 s[t.replace('M', '-')] = round(float(v), 2)
         if s:
             series[a] = s
-    return {'activities': acts, 'series': series,
+    return {'activities': acts,
+            'labels': {a: english_retail(a) for a in acts},
+            'series': series,
             'note': 'Index, 2021 = 100. ASK publishes no aggregate retail total '
                     'in this table, so none is constructed.'}
 

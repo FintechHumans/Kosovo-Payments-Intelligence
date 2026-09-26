@@ -142,11 +142,13 @@ def retail_capture(retail, pos_monthly, months=7):
                 vals.append(series[a] / series[b] - 1)
         return (sum(vals) / len(vals)) if vals else None
 
+    labels = retail.get('labels') or {}
     acts = []
     for name, s in retail['series'].items():
         g = yoy(s)
         if g is not None:
-            acts.append({'activity': name, 'yoy': g})
+            acts.append({'activity': labels.get(name, name),
+                         'activity_published': name, 'yoy': g})
     card = yoy({k: v['tx_value'] for k, v in rm.items() if v.get('tx_value')})
     if card is None or not acts:
         return None
