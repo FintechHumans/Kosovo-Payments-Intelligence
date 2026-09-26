@@ -22,6 +22,8 @@ deliverables (§7, §14, §10), not implementation details.
 # the sector is reported separately and addressable turnover is expressed as a
 # floor (excluding it) and a ceiling (including it).
 # ---------------------------------------------------------------------------
+SECTOR_MAPPING_VERSION = "v1.0"
+
 #   ATK sector name (verbatim) -> (English display name, class, note)
 SECTOR_ADDRESSABILITY = {
     "Tregtia me shumice dhe pakice; Riparimi i mjeteve motorike dhe motoeikletave":
@@ -168,7 +170,11 @@ DEFINITIONS = [
     dict(metric_key="pos_rm_allcards",
          metric_name="POS Transactions — All Cards at Kosovo POS",
          official_name="Transaksionet sipas terminaleve — pagesa me kartelë në POS",
-         institution="BQK", universe="All card payments acquired at POS terminals in Kosovo",
+         institution="BQK",
+         perspective="ACQUIRING", card_origin="ALL",
+         terminal_location="Kosovo", transaction_type="Card payment at POS",
+         frequency="monthly",
+         universe="All card payments acquired at POS terminals in Kosovo",
          cards_coverage="All cards, domestic and foreign",
          terminal_coverage="All POS terminals in Kosovo",
          geographic_coverage="Kosovo, national only",
@@ -182,7 +188,11 @@ DEFINITIONS = [
     dict(metric_key="pos_t15_domestic",
          metric_name="POS Transactions — Domestic Cards Only",
          official_name="Table 15, POS — domestic",
-         institution="BQK", universe="Cards issued in Kosovo, used at Kosovo POS",
+         institution="BQK",
+         perspective="ISSUING", card_origin="DOMESTIC",
+         terminal_location="Kosovo", transaction_type="Card payment at POS",
+         frequency="monthly",
+         universe="Cards issued in Kosovo, used at Kosovo POS",
          cards_coverage="Kosovo-issued cards only; excludes all foreign cards",
          terminal_coverage="POS terminals in Kosovo",
          geographic_coverage="Kosovo, national only",
@@ -196,7 +206,11 @@ DEFINITIONS = [
     dict(metric_key="pos_t15_allcards",
          metric_name="POS Transactions — Domestic plus Foreign Cards",
          official_name="Table 15, POS domestic + POS foreign cards in Kosovo",
-         institution="BQK", universe="All cards at Kosovo POS, per Table 15",
+         institution="BQK",
+         perspective="TERMINAL_LOCATION", card_origin="ALL",
+         terminal_location="Kosovo", transaction_type="Card payment at POS",
+         frequency="monthly",
+         universe="All cards at Kosovo POS, per Table 15",
          cards_coverage="Kosovo-issued plus foreign-issued cards used in Kosovo",
          terminal_coverage="POS terminals in Kosovo",
          geographic_coverage="Kosovo, national only",
@@ -208,9 +222,13 @@ DEFINITIONS = [
     dict(metric_key="pos_terminals_annual",
          metric_name="POS Terminals — Annual Report",
          official_name="Use of Bank Cards in Kosovo, Table 2",
-         institution="BQK", universe="POS terminals at year end, annual publication",
+         institution="BQK",
+         perspective="NA", card_origin="NA",
+         terminal_location="Kosovo", transaction_type=None,
+         frequency="annual",
+         universe="POS terminals at year end, annual publication",
          cards_coverage="n/a", terminal_coverage="POS plus EFTPOS",
-         geographic_coverage="Kosovo, plus 7 named cities as shares",
+         geographic_coverage="Kosovo, plus 7 named CITIES as shares",
          count_or_value="stock", stock_or_flow="stock", unit="terminals",
          is_default=False,
          methodology="Annual PDF report.",

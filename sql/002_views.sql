@@ -1,336 +1,313 @@
 -- ============================================================================
--- Analytical views — the only surface the dashboard reads (spec §8, §9, §26)
+-- Analytics and API layers
 --
--- Every core business KPI has exactly one authoritative formula, and it lives
--- here. The frontend does presentation arithmetic only (formatting, deltas
--- between two already-computed rows) and never re-derives a KPI.
+-- analytics.*  internal: one authoritative formula per KPI, never exposed
+-- api.*        the only surface the browser reads
 --
--- Views are created with security_invoker = on so that the caller's RLS
--- applies rather than the view owner's, and are granted select to anon.
+-- The api views deliberately do NOT set security_invoker. A view without it
+-- executes with the privileges of its owner, which is how the browser can read
+-- curated results while core and audit stay revoked from anon. That is the
+-- intended model here: expose a narrow, read-only projection rather than
+-- granting the client access to the underlying tables.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- POS market, monthly, per definition.
---
--- Grouping by definition_id is what stops two POS universes being averaged
--- together. Productivity uses the trailing-12-month AVERAGE terminal count,
--- not the end-period stock, because a count divided by a stock that grew 23%
--- during the period overstates the denominator (spec §5).
+-- POS market, monthly. Stock and flow live in different tables and are joined
+-- here on purpose, with both productivity variants returned and named
+-- distinctly — a count over an average stock is not the same measure as a
+-- count over an end-period stock, and the brief requires the difference to be
+-- visible rather than implied.
 -- ----------------------------------------------------------------------------
-create or replace view analytics.vw_pos_market_monthly
-with (security_invoker = on) as
-with base as (
-    select d.year_month,
-           d.date_id,
-           d.year,
-           d.month,
-           f.definition_id,
-           md.metric_name          as definition_name,
-           md.universe,
-           md.is_default,
-           f.pos_terminals,
-           f.merchants_physical,
-           f.transaction_count,
-           f.transaction_value
-    from core.fact_bqk_pos f
-    join core.dim_date d               on d.date_id = f.date_id
-    join core.dim_metric_definition md on md.definition_id = f.definition_id
-    join core.dim_geography g          on g.geography_id = f.geography_id
-    where g.standardized_name = 'Kosovo'
+create or replace view analytics.vw_pos_market_monthly as
+with flow as (
+    select f.date_id, f.definition_id,
+           sum(f.transaction_count) as transaction_count,
+           sum(f.transaction_value) as transaction_value
+    from core.fact_pos_transactions f
+    join core.dim_geography g on g.geography_id = f.geography_id
+    where g.geography_level = 'NATIONAL'
+    group by f.date_id, f.definition_id
+),
+stock as (
+    select s.date_id, s.definition_id,
+           s.terminal_count, s.merchants_physical
+    from core.fact_pos_terminal_stock s
+    join core.dim_geography g on g.geography_id = s.geography_id
+    where g.geography_level = 'NATIONAL'
+      and s.observation_type = 'MONTH_END'
+),
+joined as (
+    select d.date_id, d.year_month, d.year, d.month,
+           coalesce(f.definition_id, s.definition_id) as definition_id,
+           f.transaction_count, f.transaction_value,
+           s.terminal_count, s.merchants_physical
+    from core.dim_date d
+    left join flow  f on f.date_id = d.date_id
+    left join stock s on s.date_id = d.date_id and s.definition_id = f.definition_id
+    where f.definition_id is not null or s.definition_id is not null
 ),
 withavg as (
-    select b.*,
-           -- average terminals over the trailing 12 months of the same series
-           avg(b.pos_terminals) over (
-               partition by b.definition_id
-               order by b.date_id
-               rows between 11 preceding and current row
-           ) as pos_terminals_avg12
-    from base b
+    select j.*,
+           avg(j.terminal_count) over (
+               partition by j.definition_id order by j.date_id
+               rows between 11 preceding and current row) as terminal_avg_12m
+    from joined j
 )
-select w.year_month,
-       w.year,
-       w.month,
-       w.definition_id,
-       w.definition_name,
-       w.universe,
-       w.is_default,
-       w.pos_terminals,
-       w.pos_terminals_avg12,
+select w.year_month, w.year, w.month, w.definition_id,
+       md.metric_name as definition_name, md.universe, md.is_default,
+       w.terminal_count          as terminal_stock_month_end,
+       w.terminal_avg_12m        as terminal_stock_avg_12m,
        w.merchants_physical,
        w.transaction_count,
        w.transaction_value,
-       case when w.pos_terminals_avg12 > 0
-            then w.transaction_count / w.pos_terminals_avg12 end          as transactions_per_pos,
-       case when w.pos_terminals_avg12 > 0
-            then w.transaction_value / w.pos_terminals_avg12 end          as value_per_pos,
+       case when w.terminal_avg_12m > 0
+            then w.transaction_count / w.terminal_avg_12m end  as transactions_per_average_pos,
+       case when w.terminal_count > 0
+            then w.transaction_count / w.terminal_count end    as transactions_per_end_period_pos,
+       case when w.terminal_avg_12m > 0
+            then w.transaction_value / w.terminal_avg_12m end  as value_per_average_pos,
        case when w.transaction_count > 0
-            then w.transaction_value / w.transaction_count end            as average_ticket,
-       -- year-on-year, same calendar month, same definition
-       case when lag(w.pos_terminals, 12) over sw > 0
-            then w.pos_terminals / lag(w.pos_terminals, 12) over sw - 1 end    as pos_yoy,
+            then w.transaction_value / w.transaction_count end as average_ticket,
+       case when lag(w.terminal_count, 12) over sw > 0
+            then w.terminal_count / lag(w.terminal_count, 12) over sw - 1 end     as pos_yoy,
        case when lag(w.transaction_count, 12) over sw > 0
             then w.transaction_count / lag(w.transaction_count, 12) over sw - 1 end as tx_yoy,
        case when lag(w.transaction_value, 12) over sw > 0
             then w.transaction_value / lag(w.transaction_value, 12) over sw - 1 end as value_yoy
 from withavg w
-window sw as (partition by w.definition_id order by w.date_id)
-order by w.definition_id, w.year_month;
+join core.dim_metric_definition md on md.definition_id = w.definition_id
+window sw as (partition by w.definition_id order by w.date_id);
 
 -- ----------------------------------------------------------------------------
--- Payment channel mix — counts and values with their shares.
+-- Market signals. Compares the complete months of the latest year against the
+-- SAME calendar months a year earlier. A part-year is never compared with a
+-- full year — the window is built from the months that exist on both sides.
 -- ----------------------------------------------------------------------------
-create or replace view analytics.vw_payment_channel_mix
-with (security_invoker = on) as
-select d.year_month,
-       c.channel_name,
-       c.channel_group,
-       md.universe,
-       f.transaction_count,
-       f.transaction_value,
-       case when sum(f.transaction_count) over (partition by d.year_month) > 0
-            then f.transaction_count
-                 / sum(f.transaction_count) over (partition by d.year_month) end as count_share,
-       case when sum(f.transaction_value) over (partition by d.year_month) > 0
-            then f.transaction_value
-                 / sum(f.transaction_value) over (partition by d.year_month) end as value_share
-from core.fact_bqk_digital_payments f
-join core.dim_date d               on d.date_id = f.date_id
-join core.dim_channel c            on c.channel_id = f.channel_id
-join core.dim_metric_definition md on md.definition_id = f.definition_id
-order by d.year_month, c.channel_name;
+create or replace view analytics.vw_market_signals as
+with m as (
+    select definition_id, definition_name, universe, is_default, year, month,
+           terminal_stock_month_end, transaction_count, transaction_value
+    from analytics.vw_pos_market_monthly
+),
+last_period as (
+    select definition_id, max(year) as y
+    from m where transaction_count is not null
+    group by definition_id
+),
+last_month as (
+    select l.definition_id, l.y as year, max(m.month) as through_month
+    from last_period l join m on m.definition_id = l.definition_id and m.year = l.y
+    where m.transaction_count is not null
+    group by l.definition_id, l.y
+),
+paired as (
+    select lm.definition_id, lm.year, lm.through_month,
+           cur.month,
+           cur.transaction_count as tx_cur, prv.transaction_count as tx_prv,
+           cur.transaction_value as vl_cur, prv.transaction_value as vl_prv,
+           cur.terminal_stock_month_end as pos_cur,
+           prv.terminal_stock_month_end as pos_prv
+    from last_month lm
+    join m cur on cur.definition_id = lm.definition_id
+              and cur.year = lm.year and cur.month <= lm.through_month
+    join m prv on prv.definition_id = lm.definition_id
+              and prv.year = lm.year - 1 and prv.month = cur.month
+    where cur.transaction_count is not null and prv.transaction_count is not null
+),
+agg as (
+    select definition_id, year, through_month,
+           count(*)      as months_matched,
+           sum(tx_cur)   as tx_cur, sum(tx_prv)   as tx_prv,
+           sum(vl_cur)   as vl_cur, sum(vl_prv)   as vl_prv,
+           avg(pos_cur)  as pos_cur, avg(pos_prv) as pos_prv
+    from paired group by definition_id, year, through_month
+)
+select a.definition_id, md.metric_name as definition_name, md.universe, md.is_default,
+       a.year, a.through_month, a.months_matched,
+       a.pos_cur / nullif(a.pos_prv, 0) - 1 as infrastructure_growth,
+       a.tx_cur  / nullif(a.tx_prv, 0)  - 1 as usage_growth,
+       a.vl_cur  / nullif(a.vl_prv, 0)  - 1 as value_growth,
+       (a.tx_cur / nullif(a.pos_cur, 0)) / nullif(a.tx_prv / nullif(a.pos_prv, 0), 0) - 1
+                                            as productivity_growth,
+       (a.vl_cur / nullif(a.pos_cur, 0)) / nullif(a.vl_prv / nullif(a.pos_prv, 0), 0) - 1
+                                            as value_productivity_growth,
+       (a.vl_cur / nullif(a.tx_cur, 0)) / nullif(a.vl_prv / nullif(a.tx_prv, 0), 0) - 1
+                                            as average_ticket_growth,
+       (a.tx_cur / nullif(a.tx_prv, 0)) - (a.pos_cur / nullif(a.pos_prv, 0))
+                                            as usage_minus_infra_pp,
+       a.vl_cur / nullif(a.tx_cur, 0) as ticket_current,
+       a.vl_prv / nullif(a.tx_prv, 0) as ticket_prior
+from agg a
+join core.dim_metric_definition md on md.definition_id = a.definition_id;
 
 -- ----------------------------------------------------------------------------
--- Sector intelligence — ATK only, full 38 municipalities and 23 sectors.
+create or replace view analytics.vw_payment_channel_mix as
+select d.year_month, c.channel_name, c.channel_group,
+       f.transaction_count, f.transaction_value,
+       f.transaction_count / nullif(sum(f.transaction_count)
+            over (partition by d.year_month), 0) as count_share,
+       f.transaction_value / nullif(sum(f.transaction_value)
+            over (partition by d.year_month), 0) as value_share
+from core.fact_digital_payments f
+join core.dim_date d    on d.date_id = f.date_id
+join core.dim_channel c on c.channel_id = f.channel_id;
+
 -- ----------------------------------------------------------------------------
-create or replace view analytics.vw_sector_intelligence
-with (security_invoker = on) as
+-- Sector intelligence. entity_count is a monthly stock, so a yearly figure is
+-- its average across the months present, never a sum.
+-- ----------------------------------------------------------------------------
+create or replace view analytics.vw_sector_intelligence as
 select d.year,
-       d.year_month,
-       g.standardized_name as municipality,
+       g.standardized_name as geography,
+       g.geography_level,
        s.standardized_sector as sector,
-       s.addressability_category,
-       sum(f.turnover)       as turnover,
-       sum(f.business_count) as business_count,
-       case when sum(f.business_count) > 0
-            then sum(f.turnover) / sum(f.business_count) end as turnover_per_business
+       s.addressability_class,
+       f.entity_type,
+       sum(f.turnover)                            as turnover,
+       avg(f.entity_count)                        as entity_count,
+       count(distinct d.month)                    as months_covered,
+       sum(f.turnover) / nullif(avg(f.entity_count), 0) as turnover_per_entity
 from core.fact_atk_turnover f
 join core.dim_date d      on d.date_id = f.date_id
 join core.dim_geography g on g.geography_id = f.geography_id
 join core.dim_sector s    on s.sector_id = f.sector_id
-group by d.year, d.year_month, g.standardized_name, s.standardized_sector,
-         s.addressability_category
-order by d.year_month, turnover desc;
+group by d.year, g.standardized_name, g.geography_level,
+         s.standardized_sector, s.addressability_class, f.entity_type;
 
 -- ----------------------------------------------------------------------------
--- Geographic POS intensity.
---
--- Only the seven cities BQK names, only for years the annual report covers,
--- and POS counts are ESTIMATED from a share read off a chart. Addressable
--- turnover is returned as a floor/ceiling pair rather than a single number,
--- because ATK reports wholesale and retail as one section (spec §7, §10).
+-- Geographic footprint. City grain only, exactly as BQK publishes it. The
+-- transaction columns are ATM AND POS combined and are named so. No POS
+-- productivity is derived here — the numerator would be the wrong universe.
 -- ----------------------------------------------------------------------------
-create or replace view analytics.vw_geographic_pos_intensity
-with (security_invoker = on) as
-with atk_year as (
-    select d.year,
-           f.geography_id,
-           sum(f.turnover)       as turnover_total,
-           sum(f.business_count) as business_count,
-           sum(f.turnover) filter (
-               where s.addressability_category = 'high')  as turnover_high,
-           sum(f.turnover) filter (
-               where s.addressability_category in ('high','review_required')) as turnover_high_ceiling
-    from core.fact_atk_turnover f
-    join core.dim_date d   on d.date_id = f.date_id
-    join core.dim_sector s on s.sector_id = f.sector_id
-    group by d.year, f.geography_id
-)
-select g.standardized_name              as municipality,
+create or replace view analytics.vw_geo_footprint as
+select g.standardized_name as city,
        ga.year,
        ga.pos_share_pct,
        ga.pos_terminals_estimated,
        ga.atm_pos_transaction_count,
        ga.atm_pos_transaction_value,
        ga.extraction_method,
-       a.business_count,
-       a.turnover_total,
-       a.turnover_high                  as addressable_turnover_floor,
-       a.turnover_high_ceiling          as addressable_turnover_ceiling,
-       case when a.business_count > 0
-            then ga.pos_terminals_estimated / a.business_count * 1000 end as pos_per_1000_businesses,
-       case when a.turnover_high > 0
-            then ga.pos_terminals_estimated / a.turnover_high * 1e6 end   as pos_per_eur1m_addressable_floor,
-       case when a.turnover_high_ceiling > 0
-            then ga.pos_terminals_estimated / a.turnover_high_ceiling * 1e6 end as pos_per_eur1m_addressable_ceiling,
-       case when ga.pos_terminals_estimated > 0
-            then a.turnover_total / ga.pos_terminals_estimated end        as turnover_per_pos,
-       case when a.business_count > 0
-            then a.turnover_total / a.business_count end                  as turnover_per_business
-from core.fact_bqk_geo_annual ga
+       ga.pairing_verified
+from core.fact_pos_geo_annual ga
 join core.dim_geography g on g.geography_id = ga.geography_id
-left join atk_year a      on a.geography_id = ga.geography_id
-                         and a.year = ga.year
-order by ga.year desc, ga.pos_share_pct desc;
+where g.geography_level = 'CITY';
 
 -- ----------------------------------------------------------------------------
--- Market signals — facts only, never interpretation (spec §11, §21).
---
--- Compares the latest N complete months against the same months a year
--- earlier, so a part-year never distorts a growth rate.
+-- Economic context. Joins BQK city data to ATK municipality data, which is a
+-- GRAIN APPROXIMATION: a municipality contains settlements outside its city.
+-- The view returns the flag so the UI states it, and audit.kpi_build_status
+-- carries WARNING for every ratio built from it.
 -- ----------------------------------------------------------------------------
-create or replace view analytics.vw_market_signals
-with (security_invoker = on) as
-with d as (
-    select definition_id, definition_name, universe, is_default,
-           year, month, pos_terminals, transaction_count, transaction_value
-    from analytics.vw_pos_market_monthly
-),
-latest as (
-    select definition_id, max(year) as year, max(month) filter (
-               where year = (select max(year) from d d2 where d2.definition_id = d.definition_id)
-           ) as month
-    from d group by definition_id
-),
-window_months as (
-    select l.definition_id, l.year, l.month,
-           generate_series(1, l.month) as m
-    from latest l
-),
-agg as (
-    select w.definition_id,
-           w.year,
-           w.month                                     as through_month,
-           sum(cur.transaction_count)                  as tx_cur,
-           sum(prv.transaction_count)                  as tx_prv,
-           sum(cur.transaction_value)                  as val_cur,
-           sum(prv.transaction_value)                  as val_prv,
-           avg(cur.pos_terminals)                      as pos_cur,
-           avg(prv.pos_terminals)                      as pos_prv,
-           count(prv.transaction_count)                as months_matched
-    from window_months w
-    join d cur on cur.definition_id = w.definition_id
-              and cur.year = w.year and cur.month = w.m
-    left join d prv on prv.definition_id = w.definition_id
-              and prv.year = w.year - 1 and prv.month = w.m
-    group by w.definition_id, w.year, w.month
+create or replace view analytics.vw_economic_context as
+with atk as (
+    select d.year, f.geography_id,
+           sum(f.turnover) as turnover_total,
+           avg(f.entity_count) filter (where true) as entity_count,
+           sum(f.turnover) filter (where s.addressability_class = 'HIGH') as addressable_floor,
+           sum(f.turnover) filter (where s.addressability_class in ('HIGH','REVIEW_REQUIRED'))
+               as addressable_ceiling
+    from core.fact_atk_turnover f
+    join core.dim_date d   on d.date_id = f.date_id
+    join core.dim_sector s on s.sector_id = f.sector_id
+    where f.entity_type = 'TAXPAYER'
+    group by d.year, f.geography_id
 )
-select a.definition_id,
-       dd.definition_name,
-       dd.universe,
-       dd.is_default,
-       a.year,
-       a.through_month,
-       a.months_matched,
-       a.pos_cur / nullif(a.pos_prv, 0) - 1 as infrastructure_growth,
-       a.tx_cur  / nullif(a.tx_prv, 0)  - 1 as usage_growth,
-       a.val_cur / nullif(a.val_prv, 0) - 1 as value_growth,
-       (a.tx_cur / nullif(a.pos_cur, 0))
-         / nullif(a.tx_prv / nullif(a.pos_prv, 0), 0) - 1 as productivity_growth,
-       (a.val_cur / nullif(a.pos_cur, 0))
-         / nullif(a.val_prv / nullif(a.pos_prv, 0), 0) - 1 as value_productivity_growth,
-       (a.val_cur / nullif(a.tx_cur, 0))
-         / nullif(a.val_prv / nullif(a.tx_prv, 0), 0) - 1  as average_ticket_growth,
-       (a.tx_cur / nullif(a.tx_prv, 0)) - (a.pos_cur / nullif(a.pos_prv, 0)) as usage_minus_infra_pp
-from agg a
-join (select distinct definition_id, definition_name, universe, is_default
-      from d) dd on dd.definition_id = a.definition_id;
+select gc.standardized_name        as city,
+       gm.standardized_name        as municipality,
+       ga.year,
+       ga.pos_terminals_estimated,
+       ga.pairing_verified,
+       a.entity_count,
+       a.turnover_total,
+       a.addressable_floor,
+       a.addressable_ceiling,
+       'TAXPAYER'::text            as entity_type,
+       'CITY_TO_MUNICIPALITY'::text as grain_approximation,
+       ga.pos_terminals_estimated / nullif(a.entity_count, 0) * 1000
+            as pos_per_1000_taxpayers,
+       ga.pos_terminals_estimated / nullif(a.addressable_ceiling, 0) * 1e6
+            as pos_per_eur1m_addressable_ceiling,
+       ga.pos_terminals_estimated / nullif(a.addressable_floor, 0) * 1e6
+            as pos_per_eur1m_addressable_floor,
+       a.turnover_total / nullif(ga.pos_terminals_estimated, 0) as turnover_per_pos
+from core.fact_pos_geo_annual ga
+join core.dim_geography gc on gc.geography_id = ga.geography_id
+join core.dim_geography gm on gm.standardized_name = gc.standardized_name
+                          and gm.geography_level = 'MUNICIPALITY'
+left join atk a on a.geography_id = gm.geography_id and a.year = ga.year;
 
--- ----------------------------------------------------------------------------
--- Data status, for the management-facing panel (spec §28).
--- ----------------------------------------------------------------------------
-create or replace view analytics.vw_data_status
-with (security_invoker = on) as
-select s.institution,
-       s.dataset_name,
-       s.source_url,
-       s.source_table,
-       s.publication_date,
-       s.reporting_start_date,
-       s.reporting_end_date,
-       s.frequency,
-       s.methodology_notes,
-       r.completed_at                as last_refresh,
-       r.status                      as last_run_status,
-       (select count(*) from audit.data_quality_checks q
-         where q.source_id = s.source_id and q.status = 'passed')  as checks_passed,
-       (select count(*) from audit.data_quality_checks q
-         where q.source_id = s.source_id and q.status = 'failed')  as checks_failed
+-- ============================================================================
+-- API — the browser surface
+-- ============================================================================
+
+create or replace view api.overview_monthly as
+select year_month, year, month, definition_id, definition_name, universe, is_default,
+       terminal_stock_month_end, terminal_stock_avg_12m, merchants_physical,
+       transaction_count, transaction_value,
+       transactions_per_average_pos, transactions_per_end_period_pos,
+       value_per_average_pos, average_ticket, pos_yoy, tx_yoy, value_yoy
+from analytics.vw_pos_market_monthly;
+
+create or replace view api.market_signals as
+select * from analytics.vw_market_signals;
+
+create or replace view api.payment_behaviour as
+select * from analytics.vw_payment_channel_mix;
+
+create or replace view api.geo_summary as
+select * from analytics.vw_geo_footprint;
+
+create or replace view api.economic_context as
+select * from analytics.vw_economic_context;
+
+create or replace view api.sector_summary as
+select * from analytics.vw_sector_intelligence;
+
+create or replace view api.methodology as
+select k.kpi_id, k.display_name, k.business_definition, k.sql_formula,
+       k.numerator, k.denominator, k.required_definition, k.frequency,
+       k.aggregation_rule, k.valid_comparison_method, k.source_requirements,
+       k.known_limitations, s.status, s.reason
+from analytics.kpi_registry k
+left join audit.kpi_build_status s on s.kpi_id = k.kpi_id;
+
+create or replace view api.definitions as
+select definition_id, metric_key, metric_name, official_name, institution,
+       perspective, universe, card_origin, cards_coverage, count_or_value,
+       stock_or_flow, geographic_coverage, frequency, unit, is_default,
+       methodology, limitations
+from core.dim_metric_definition;
+
+create or replace view api.data_status as
+select s.institution, s.dataset_name, s.official_title, s.source_url, s.frequency,
+       v.original_filename, v.source_table, v.publication_date,
+       v.reporting_start_date, v.reporting_end_date, v.downloaded_at,
+       v.file_size, v.sha256_hash, v.parser_version, v.revision_detected,
+       r.completed_at as last_run, r.status as last_run_status
 from audit.data_sources s
+join audit.source_versions v on v.source_id = s.source_id and v.is_current
 left join lateral (
     select * from audit.etl_runs e
-    where e.source_id = s.source_id
-    order by e.started_at desc limit 1
-) r on true
+    where e.source_version_id = v.source_version_id
+    order by e.started_at desc limit 1) r on true
 where s.is_active;
 
--- ----------------------------------------------------------------------------
--- Definition dictionary, exposed so the UI can show the active universe.
--- ----------------------------------------------------------------------------
-create or replace view analytics.vw_metric_definitions
-with (security_invoker = on) as
-select definition_id, metric_key, metric_name, official_name, institution,
-       universe, cards_coverage, terminal_coverage, geographic_coverage,
-       count_or_value, stock_or_flow, unit, is_default, methodology, limitations
-from core.dim_metric_definition
-order by is_default desc, metric_name;
+create or replace view api.quality_findings as
+select check_type, check_group, severity, table_name, reporting_period,
+       expected_value, actual_value, variance, variance_percent, status, message
+from audit.data_quality_checks
+where run_id = (select max(run_id) from audit.etl_runs where status <> 'running');
 
--- ----------------------------------------------------------------------------
--- Quality findings the dashboard surfaces as badges.
--- ----------------------------------------------------------------------------
-create or replace view analytics.vw_quality_findings
-with (security_invoker = on) as
-select q.check_type, q.severity, q.table_name, q.reporting_period,
-       q.expected_value, q.actual_value, q.status, q.message, q.checked_at,
-       s.institution, s.dataset_name
-from audit.data_quality_checks q
-left join audit.data_sources s on s.source_id = q.source_id
-where q.run_id = (select max(run_id) from audit.etl_runs where status <> 'running')
-order by case q.severity when 'high' then 1 when 'warning' then 2 else 3 end;
+create or replace view api.reconciliation as
+select * from audit.source_reconciliation;
 
--- ============================================================================
--- Read-only grants. The browser can select from analytics and nothing else;
--- no insert, update or delete is granted anywhere, to any client role.
--- ============================================================================
-grant select on analytics.vw_pos_market_monthly       to anon, authenticated;
-grant select on analytics.vw_payment_channel_mix      to anon, authenticated;
-grant select on analytics.vw_sector_intelligence      to anon, authenticated;
-grant select on analytics.vw_geographic_pos_intensity to anon, authenticated;
-grant select on analytics.vw_market_signals           to anon, authenticated;
-grant select on analytics.vw_data_status              to anon, authenticated;
-grant select on analytics.vw_metric_definitions       to anon, authenticated;
-grant select on analytics.vw_quality_findings         to anon, authenticated;
+create or replace view api.series_coverage as
+select * from audit.series_coverage;
 
--- security_invoker views still need the underlying select right for the caller,
--- so grant it narrowly on the curated layer only — raw and audit stay closed
--- except for the two audit tables the status and quality views read.
-grant usage  on schema core to anon, authenticated;
-grant select on core.dim_date, core.dim_geography, core.dim_sector,
-                core.dim_channel, core.dim_card_type, core.dim_scheme,
-                core.dim_metric_definition,
-                core.fact_bqk_pos, core.fact_bqk_atm, core.fact_bqk_cards,
-                core.fact_bqk_digital_payments, core.fact_bqk_geo_annual,
-                core.fact_atk_turnover
-             to anon, authenticated;
-grant usage  on schema audit to anon, authenticated;
-grant select on audit.data_sources, audit.etl_runs, audit.data_quality_checks
-             to anon, authenticated;
+create or replace view api.kpi_status as
+select * from audit.kpi_build_status;
 
--- Matching permissive read policies, so RLS admits select and still denies
--- every write path.
-do $$
-declare t text;
-begin
-  foreach t in array array[
-    'core.dim_date','core.dim_geography','core.dim_sector','core.dim_channel',
-    'core.dim_card_type','core.dim_scheme','core.dim_metric_definition',
-    'core.fact_bqk_pos','core.fact_bqk_atm','core.fact_bqk_cards',
-    'core.fact_bqk_digital_payments','core.fact_bqk_geo_annual',
-    'core.fact_atk_turnover','audit.data_sources','audit.etl_runs',
-    'audit.data_quality_checks']
-  loop
-    execute format(
-      'drop policy if exists p_read on %s; create policy p_read on %s for select to anon, authenticated using (true);',
-      t, t);
-  end loop;
-end $$;
+grant select on all tables in schema api to anon, authenticated;
+
+-- Read-only is enforced by granting select and nothing else; no insert, update
+-- or delete is granted to any client role anywhere in the database.

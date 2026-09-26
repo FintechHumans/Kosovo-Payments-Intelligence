@@ -1,331 +1,445 @@
 -- ============================================================================
--- Kosovo Merchant & Payments Intelligence — Phase 1 schema
+-- Kosovo Merchant & Payments Intelligence — Phase 1 schema (v2)
 --
--- Four schemas, strictly separated (spec §22):
---   raw       parsed source rows, kept close to the publication
+-- Five schemas, strictly separated:
+--   raw       parsed source records, kept close to the publication
 --   core      dimensions and curated facts
---   analytics the only surface the dashboard may read
---   audit     lineage, ETL runs, quality checks
+--   analytics validated analytical views
+--   api       the only surface the browser may read
+--   audit     source versions, ETL runs, checks, KPI registry and status
 --
--- The keystone is core.dim_metric_definition. BQK publishes three different
--- numbers that can all be called "POS transactions", differing by up to 43%.
--- Every POS fact row carries a definition_id, and the analytical views group
--- by it, so summing two universes together is structurally impossible rather
--- than merely discouraged.
+-- Three corrections over v1, each a real modelling defect rather than a
+-- cosmetic change:
 --
--- Public statistical data only. No bank-level, merchant-level or taxpayer-level
--- record is modelled here; those belong to Phase 2 (see §30).
+--   1. STOCK AND FLOW ARE SEPARATED. v1 carried pos_terminals (a stock) in the
+--      same row as transaction_count and transaction_value (flows). That makes
+--      it possible to sum a stock across months, which is meaningless. They
+--      are now distinct fact tables and can only be combined deliberately.
+--
+--   2. CITY IS NOT MUNICIPALITY. BQK publishes a POS distribution across seven
+--      *cities*; ATK publishes turnover for 38 *municipalities*. The Prishtinë
+--      municipality contains settlements outside Prishtinë city, so dividing
+--      one by the other mixes grains. dim_geography now records the level, and
+--      any KPI crossing levels is marked in audit.kpi_build_status rather than
+--      being silently computed.
+--
+--   3. TAXPAYERS ARE NOT BUSINESSES. ATK publishes "Numri i Tatimpaguesve" —
+--      registered taxpayers filing in that month, which includes entities that
+--      are not card-accepting businesses. fact_atk_turnover carries an
+--      entity_type so the denominator is never mislabelled.
+--
+-- Money uses numeric, never float.
 -- ============================================================================
 
 create schema if not exists raw;
 create schema if not exists core;
 create schema if not exists analytics;
+create schema if not exists api;
 create schema if not exists audit;
 
 -- ============================================================================
--- AUDIT — lineage first, because everything else references it
+-- AUDIT — provenance first
 -- ============================================================================
 
 create table if not exists audit.data_sources (
-    source_id            text primary key,
-    institution          text        not null check (institution in ('BQK','ATK')),
-    dataset_name         text        not null,
-    source_url           text        not null,
+    source_id         text primary key,
+    institution       text not null check (institution in ('BQK','ATK')),
+    dataset_name      text not null,
+    official_title    text,
+    source_url        text not null,
+    source_language   text,
+    frequency         text not null check (frequency in ('monthly','quarterly','annual')),
+    methodology_notes text,
+    is_active         boolean not null default true
+);
+
+-- Every physical file, hashed. A publisher replacing a file at the same URL is
+-- detected rather than silently absorbed.
+create table if not exists audit.source_versions (
+    source_version_id    bigserial primary key,
+    source_id            text not null references audit.data_sources(source_id),
+    original_filename    text,
+    source_url           text,
     source_table         text,
+    source_sheet         text,
     publication_date     date,
     reporting_start_date date,
     reporting_end_date   date,
-    frequency            text        not null check (frequency in ('monthly','quarterly','annual')),
-    file_type            text        not null,
     downloaded_at        timestamptz,
-    source_hash          text,
-    methodology_notes    text,
-    is_active            boolean     not null default true
+    file_size            bigint,
+    sha256_hash          text,
+    parser_version       text not null,
+    supersedes_version_id bigint references audit.source_versions(source_version_id),
+    revision_detected    boolean not null default false,
+    is_current           boolean not null default true,
+    unique (source_id, sha256_hash, parser_version)
 );
 
-comment on table audit.data_sources is
-    'One row per official publication actually ingested. source_hash lets a '
-    'reload detect that the publisher silently replaced a file at the same URL.';
+create index if not exists ix_sv_current on audit.source_versions (source_id, is_current);
+
+comment on table audit.source_versions is
+    'Answers "which exact file produced this KPI?". A new hash for a period '
+    'already loaded sets revision_detected and supersedes the previous row; '
+    'the old row is retained, never deleted.';
 
 create table if not exists audit.etl_runs (
-    run_id             bigserial primary key,
-    source_id          text references audit.data_sources(source_id),
-    started_at         timestamptz not null default now(),
-    completed_at       timestamptz,
-    status             text        not null default 'running'
-                       check (status in ('running','succeeded','failed','partial')),
-    records_extracted  integer default 0,
-    records_inserted   integer default 0,
-    records_updated    integer default 0,
-    records_rejected   integer default 0,
-    error_message      text
+    run_id            bigserial primary key,
+    source_version_id bigint references audit.source_versions(source_version_id),
+    started_at        timestamptz not null default now(),
+    completed_at      timestamptz,
+    status            text not null default 'running'
+                      check (status in ('running','succeeded','failed','partial')),
+    records_extracted integer default 0,
+    records_inserted  integer default 0,
+    records_updated   integer default 0,
+    records_rejected  integer default 0,
+    error_message     text
 );
-
-create index if not exists ix_etl_runs_source on audit.etl_runs (source_id, started_at desc);
 
 create table if not exists audit.data_quality_checks (
-    check_id         bigserial primary key,
-    run_id           bigint references audit.etl_runs(run_id) on delete cascade,
-    source_id        text   references audit.data_sources(source_id),
-    check_type       text   not null,
-    severity         text   not null check (severity in ('info','warning','high')),
-    table_name       text,
-    reporting_period text,
-    record_reference text,
-    expected_value   text,
-    actual_value     text,
-    status           text   not null check (status in ('passed','failed')),
-    message          text,
-    checked_at       timestamptz not null default now()
+    check_id          bigserial primary key,
+    run_id            bigint references audit.etl_runs(run_id) on delete cascade,
+    source_version_id bigint references audit.source_versions(source_version_id),
+    check_type        text not null,
+    check_group       text,
+    severity          text not null check (severity in ('info','warning','high')),
+    table_name        text,
+    reporting_period  text,
+    record_reference  text,
+    expected_value    text,
+    actual_value      text,
+    variance          numeric,
+    variance_percent  numeric,
+    tolerance         numeric,
+    status            text not null check (status in ('passed','failed')),
+    message           text,
+    checked_at        timestamptz not null default now()
 );
 
-create index if not exists ix_dq_status on audit.data_quality_checks (status, severity);
-create index if not exists ix_dq_run    on audit.data_quality_checks (run_id);
+create index if not exists ix_dq on audit.data_quality_checks (status, severity, check_group);
 
--- ============================================================================
--- RAW — never overwritten by cleaning
--- ============================================================================
-
-create table if not exists raw.bqk_data (
-    raw_id         bigserial primary key,
-    source_id      text not null references audit.data_sources(source_id),
-    run_id         bigint references audit.etl_runs(run_id),
-    source_table   text,
-    source_sheet   text,
-    source_row     integer,
-    reporting_date date not null,
-    metric_name    text not null,
-    dimension_1    text,
-    dimension_2    text,
-    dimension_3    text,
-    raw_value      numeric,
-    raw_unit       text,
-    loaded_at      timestamptz not null default now()
+-- Cross-source reconciliation is its own record, because a difference between
+-- two official series is usually methodology rather than error.
+create table if not exists audit.source_reconciliation (
+    reconciliation_id bigserial primary key,
+    metric            text not null,
+    definition_a      integer,
+    definition_b      integer,
+    reporting_period  text,
+    value_a           numeric,
+    value_b           numeric,
+    abs_difference    numeric,
+    pct_difference    numeric,
+    classification    text not null check (classification in
+        ('MATCH','IMMATERIAL_DIFFERENCE','METHODOLOGY_DIFFERENCE','REVISION',
+         'NOT_COMPARABLE','UNEXPLAINED')),
+    note              text
 );
 
-create index if not exists ix_raw_bqk_metric on raw.bqk_data (metric_name, reporting_date);
+-- Does this series support a year-on-year comparison at all?
+create table if not exists audit.series_coverage (
+    coverage_id           bigserial primary key,
+    metric                text not null,
+    definition_id         integer,
+    first_period          text,
+    last_period           text,
+    expected_observations integer,
+    actual_observations   integer,
+    missing_observations  integer,
+    coverage_percentage   numeric,
+    continuity_status     text check (continuity_status in
+        ('CONTINUOUS','GAPS','BROKEN','INSUFFICIENT_FOR_YOY'))
+);
+
+-- Whether a KPI may be shown at all, and why not when it may not.
+create table if not exists audit.kpi_build_status (
+    kpi_id          text primary key,
+    status          text not null check (status in ('PASS','WARNING','FAIL','BLOCKED')),
+    reason          text,
+    required_input  text,
+    last_checked_at timestamptz not null default now()
+);
+
+-- ============================================================================
+-- RAW
+-- ============================================================================
+
+create table if not exists raw.bqk_records (
+    raw_id            bigserial primary key,
+    source_version_id bigint not null references audit.source_versions(source_version_id),
+    run_id            bigint references audit.etl_runs(run_id),
+    source_table      text,
+    source_sheet      text,
+    source_row        integer,
+    reporting_date    date not null,
+    geography_raw     text,
+    metric_raw        text not null,
+    dimension_1       text,
+    dimension_2       text,
+    dimension_3       text,
+    raw_value         numeric,
+    raw_unit          text,
+    loaded_at         timestamptz not null default now()
+);
 
 create table if not exists raw.atk_turnover (
-    raw_id              bigserial primary key,
-    source_id           text not null references audit.data_sources(source_id),
-    run_id              bigint references audit.etl_runs(run_id),
-    year                integer not null,
-    month               integer not null check (month between 1 and 12),
-    municipality_raw    text,
-    sector_raw          text,
-    business_status_raw text,
-    business_count_raw  numeric,
-    turnover_raw        numeric,
-    loaded_at           timestamptz not null default now()
+    raw_id             bigserial primary key,
+    source_version_id  bigint not null references audit.source_versions(source_version_id),
+    run_id             bigint references audit.etl_runs(run_id),
+    year               integer not null,
+    month              integer not null check (month between 1 and 12),
+    municipality_raw   text,
+    sector_raw         text,
+    status_raw         text,
+    business_count_raw numeric,
+    turnover_raw       numeric,
+    loaded_at          timestamptz not null default now()
 );
 
-create index if not exists ix_raw_atk_period on raw.atk_turnover (year, month);
+create index if not exists ix_raw_atk on raw.atk_turnover (year, month);
 
 -- ============================================================================
 -- CORE — dimensions
 -- ============================================================================
 
 create table if not exists core.dim_date (
-    date_id    integer primary key,           -- yyyymm
-    period_date date    not null,             -- first day of month
-    year       integer not null,
-    quarter    integer not null,
-    month      integer not null,
-    year_month text    not null unique,       -- 'YYYY-MM'
-    month_name text    not null
+    date_id      integer primary key,          -- yyyymm
+    period_start date not null,
+    period_end   date not null,
+    year         integer not null,
+    quarter      integer not null,
+    month        integer not null,
+    year_month   text not null unique,
+    month_name   text not null
 );
+-- No stored YTD flag: year-to-date is a property of a query, not of a month.
 
 create table if not exists core.dim_geography (
-    geography_id       serial primary key,
-    municipality_code  text unique,
-    standardized_name  text not null unique,
-    atk_name           text,
-    bqk_name           text,
-    region             text,
-    match_status       text not null
-        check (match_status in ('matched','atk_only','bqk_only','unmatched'))
+    geography_id      serial primary key,
+    geography_name    text not null,
+    geography_level   text not null check (geography_level in
+        ('NATIONAL','REGION','MUNICIPALITY','CITY','OTHER')),
+    municipality_code text,
+    region            text,
+    standardized_name text not null,
+    bqk_name          text,
+    atk_name          text,
+    match_method      text,
+    match_confidence  text check (match_confidence in ('exact','reviewed','fuzzy','none')),
+    review_status     text check (review_status in ('accepted','needs_review','rejected')),
+    unique (standardized_name, geography_level)
 );
 
-comment on column core.dim_geography.match_status is
-    'ATK publishes 38 municipalities monthly; BQK names only 7 cities, annually. '
-    'Rows that exist on one side only are kept and flagged, never dropped.';
+comment on column core.dim_geography.geography_level is
+    'CITY and MUNICIPALITY are different grains and are stored as different '
+    'rows. A join across them is a documented approximation, never implicit.';
 
 create table if not exists core.dim_sector (
-    sector_id              serial primary key,
-    source_sector_name     text not null unique,
-    standardized_sector    text not null,
-    parent_sector          text,
-    addressability_category text not null
-        check (addressability_category in ('high','medium','low','review_required')),
-    addressability_notes   text
+    sector_id           serial primary key,
+    source_system       text not null,
+    source_sector_code  text,
+    source_sector_name  text not null,
+    standardized_sector text not null,
+    parent_sector       text,
+    addressability_class text not null check (addressability_class in
+        ('HIGH','MEDIUM','LOW','REVIEW_REQUIRED')),
+    rationale           text,
+    confidence          text check (confidence in ('high','medium','low')),
+    review_status       text check (review_status in ('accepted','needs_review')),
+    mapping_version     text not null,
+    effective_from      date,
+    effective_to        date,
+    unique (source_system, source_sector_name, mapping_version)
 );
 
-comment on column core.dim_sector.addressability_category is
-    'review_required is used where the published granularity cannot support a '
-    'judgement — notably wholesale and retail, which ATK reports as one section '
-    'worth ~46% of turnover. No invented split factor is applied (spec §7).';
-
 create table if not exists core.dim_channel (
-    channel_id serial primary key,
-    channel_name text not null unique,
+    channel_id    serial primary key,
+    channel_name  text not null unique,
     channel_group text
 );
 
 create table if not exists core.dim_card_type (
-    card_type_id serial primary key,
+    card_type_id   serial primary key,
     card_type_name text not null unique
 );
 
 create table if not exists core.dim_scheme (
-    scheme_id serial primary key,
+    scheme_id   serial primary key,
     scheme_name text not null unique
 );
 
--- The keystone.
+-- The keystone: which universe a POS number actually describes.
 create table if not exists core.dim_metric_definition (
     definition_id       serial primary key,
     metric_key          text not null unique,
     metric_name         text not null,
     official_name       text,
     institution         text not null,
+    perspective         text check (perspective in ('ISSUING','ACQUIRING','TERMINAL_LOCATION','NA')),
     universe            text not null,
+    card_origin         text check (card_origin in ('DOMESTIC','FOREIGN','ALL','NA')),
+    terminal_location   text,
     cards_coverage      text,
-    terminal_coverage   text,
-    geographic_coverage text,
+    transaction_type    text,
     count_or_value      text check (count_or_value in ('count','value','both','stock')),
     stock_or_flow       text check (stock_or_flow in ('stock','flow')),
+    geographic_coverage text,
+    frequency           text,
     unit                text,
     is_default          boolean not null default false,
     methodology         text,
     limitations         text
 );
 
-comment on table core.dim_metric_definition is
-    'Distinguishes the incompatible BQK series. The monthly Raport Mujor POS '
-    'terminal count (25,166 in Jan 2025) and the annual report count (20,913 at '
-    'end-2024) are different universes and must never be spliced into one trend.';
-
 -- ============================================================================
--- CORE — facts
+-- CORE — facts, stock and flow kept apart
 -- ============================================================================
 
-create table if not exists core.fact_bqk_pos (
-    date_id           integer not null references core.dim_date(date_id),
-    definition_id     integer not null references core.dim_metric_definition(definition_id),
-    source_id         text    not null references audit.data_sources(source_id),
-    -- national rows carry the 'Kosovo' sentinel geography, so the key needs no
-    -- coalesce() (which a primary key cannot contain anyway)
-    geography_id      integer not null references core.dim_geography(geography_id),
-    pos_terminals     numeric,
-    eftpos            numeric,
-    virtual_pos       numeric,
+create table if not exists core.fact_pos_terminal_stock (
+    date_id            integer not null references core.dim_date(date_id),
+    geography_id       integer not null references core.dim_geography(geography_id),
+    definition_id      integer not null references core.dim_metric_definition(definition_id),
+    source_version_id  bigint  not null references audit.source_versions(source_version_id),
+    terminal_count     numeric,
+    eftpos_count       numeric,
+    virtual_pos_count  numeric,
     merchants_physical numeric,
-    merchants_virtual numeric,
+    merchants_virtual  numeric,
+    observation_type   text not null check (observation_type in
+        ('MONTH_END','YEAR_END','AVERAGE','ESTIMATED','OTHER')),
+    primary key (date_id, geography_id, definition_id, observation_type)
+);
+
+create table if not exists core.fact_pos_transactions (
+    date_id           integer not null references core.dim_date(date_id),
+    geography_id      integer not null references core.dim_geography(geography_id),
+    definition_id     integer not null references core.dim_metric_definition(definition_id),
+    channel_id        integer not null references core.dim_channel(channel_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
     transaction_count numeric,
     transaction_value numeric,
-    loaded_at         timestamptz not null default now(),
-    primary key (date_id, definition_id, geography_id)
+    primary key (date_id, geography_id, definition_id, channel_id)
 );
 
-create index if not exists ix_pos_def on core.fact_bqk_pos (definition_id, date_id);
-
-create table if not exists core.fact_bqk_atm (
-    date_id          integer not null references core.dim_date(date_id),
-    definition_id    integer not null references core.dim_metric_definition(definition_id),
-    source_id        text    not null references audit.data_sources(source_id),
-    atm_count        numeric,
-    withdrawal_count numeric,
-    withdrawal_value numeric,
-    deposit_count    numeric,
-    deposit_value    numeric,
-    primary key (date_id, definition_id)
-);
-
-create table if not exists core.fact_bqk_cards (
+create table if not exists core.fact_card_stock (
     date_id           integer not null references core.dim_date(date_id),
     card_type_id      integer not null references core.dim_card_type(card_type_id),
-    -- an 'All schemes' sentinel row keeps this key expression-free
     scheme_id         integer not null references core.dim_scheme(scheme_id),
     definition_id     integer not null references core.dim_metric_definition(definition_id),
-    source_id         text    not null references audit.data_sources(source_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
     cards_issued      numeric,
-    transaction_count numeric,
-    transaction_value numeric,
     primary key (date_id, card_type_id, scheme_id, definition_id)
 );
 
-create table if not exists core.fact_bqk_digital_payments (
+create table if not exists core.fact_atm_stock (
+    date_id           integer not null references core.dim_date(date_id),
+    geography_id      integer not null references core.dim_geography(geography_id),
+    definition_id     integer not null references core.dim_metric_definition(definition_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
+    atm_count         numeric,
+    observation_type  text not null default 'MONTH_END',
+    primary key (date_id, geography_id, definition_id)
+);
+
+create table if not exists core.fact_atm_transactions (
+    date_id           integer not null references core.dim_date(date_id),
+    geography_id      integer not null references core.dim_geography(geography_id),
+    definition_id     integer not null references core.dim_metric_definition(definition_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
+    withdrawal_count  numeric,
+    withdrawal_value  numeric,
+    deposit_count     numeric,
+    deposit_value     numeric,
+    primary key (date_id, geography_id, definition_id)
+);
+
+create table if not exists core.fact_digital_payments (
     date_id           integer not null references core.dim_date(date_id),
     channel_id        integer not null references core.dim_channel(channel_id),
     definition_id     integer not null references core.dim_metric_definition(definition_id),
-    source_id         text    not null references audit.data_sources(source_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
     transaction_count numeric,
     transaction_value numeric,
     primary key (date_id, channel_id, definition_id)
 );
 
--- Annual, 7 cities, read off a chart in the annual PDF. Deliberately a separate
--- table from fact_bqk_pos: different grain, different universe, different
--- confidence. The transaction columns are ATM and POS COMBINED — the source
--- does not separate them, so the column names say so.
-create table if not exists core.fact_bqk_geo_annual (
-    year                     integer not null,
-    geography_id             integer not null references core.dim_geography(geography_id),
-    source_id                text    not null references audit.data_sources(source_id),
-    pos_share_pct            numeric,
-    atm_share_pct            numeric,
-    pos_terminals_estimated  numeric,
-    atm_pos_transaction_count numeric,
+-- Annual, city grain, derived from a share read off a chart. Separate table so
+-- its lower confidence and different grain cannot leak into the monthly series.
+create table if not exists core.fact_pos_geo_annual (
+    year                      integer not null,
+    geography_id              integer not null references core.dim_geography(geography_id),
+    source_version_id         bigint  not null references audit.source_versions(source_version_id),
+    pos_share_pct             numeric,
+    atm_share_pct             numeric,
+    pos_terminals_estimated   numeric,
+    atm_pos_transaction_count numeric,   -- ATM AND POS combined, per the source
     atm_pos_transaction_value numeric,
-    extraction_method        text not null default 'pdf_chart_manual',
+    extraction_method         text not null default 'pdf_chart_manual',
+    pairing_verified          boolean not null default false,
     primary key (year, geography_id)
 );
 
 create table if not exists core.fact_atk_turnover (
-    date_id        integer not null references core.dim_date(date_id),
-    geography_id   integer not null references core.dim_geography(geography_id),
-    sector_id      integer not null references core.dim_sector(sector_id),
-    source_id      text    not null references audit.data_sources(source_id),
-    business_count numeric,
-    turnover       numeric,
-    primary key (date_id, geography_id, sector_id)
+    date_id           integer not null references core.dim_date(date_id),
+    geography_id      integer not null references core.dim_geography(geography_id),
+    sector_id         integer not null references core.dim_sector(sector_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
+    turnover          numeric,
+    entity_count      numeric,
+    entity_type       text not null check (entity_type in
+        ('TAXPAYER','REGISTERED_BUSINESS','ACTIVE_BUSINESS','REPORTING_BUSINESS','OTHER')),
+    business_status   text,
+    primary key (date_id, geography_id, sector_id, entity_type)
 );
 
 create index if not exists ix_atk_geo    on core.fact_atk_turnover (geography_id, date_id);
 create index if not exists ix_atk_sector on core.fact_atk_turnover (sector_id, date_id);
+create index if not exists ix_pos_tx_def on core.fact_pos_transactions (definition_id, date_id);
+create index if not exists ix_pos_st_def on core.fact_pos_terminal_stock (definition_id, date_id);
 
 -- ============================================================================
--- ROW LEVEL SECURITY (spec §21)
+-- ANALYTICS — one authoritative formula per KPI
+-- ============================================================================
+
+create table if not exists analytics.kpi_registry (
+    kpi_id                  text primary key,
+    display_name            text not null,
+    business_definition     text not null,
+    sql_formula             text not null,
+    numerator               text,
+    denominator             text,
+    required_definition     text,
+    frequency               text,
+    aggregation_rule        text,
+    valid_comparison_method text,
+    source_requirements     text,
+    known_limitations       text
+);
+
+-- ============================================================================
+-- SECURITY
 --
--- Everything is RLS-enabled with no permissive policy, which denies the
--- anon and authenticated roles by default. Read access is granted only on the
--- analytics views below, and only for select. Raw and audit tables are never
--- reachable from the browser; ETL runs with the service role, server-side.
+-- Only the api schema is reachable from the browser. raw, core and audit are
+-- revoked outright; analytics is internal. RLS is enabled everywhere so that
+-- no future grant accidentally opens a table, and no write policy exists for
+-- any client role — ETL runs server-side under the service role.
 -- ============================================================================
 
-alter table raw.bqk_data                enable row level security;
-alter table raw.atk_turnover            enable row level security;
-alter table audit.data_sources          enable row level security;
-alter table audit.etl_runs              enable row level security;
-alter table audit.data_quality_checks   enable row level security;
-alter table core.dim_date               enable row level security;
-alter table core.dim_geography          enable row level security;
-alter table core.dim_sector             enable row level security;
-alter table core.dim_channel            enable row level security;
-alter table core.dim_card_type          enable row level security;
-alter table core.dim_scheme             enable row level security;
-alter table core.dim_metric_definition  enable row level security;
-alter table core.fact_bqk_pos           enable row level security;
-alter table core.fact_bqk_atm           enable row level security;
-alter table core.fact_bqk_cards         enable row level security;
-alter table core.fact_bqk_digital_payments enable row level security;
-alter table core.fact_bqk_geo_annual    enable row level security;
-alter table core.fact_atk_turnover      enable row level security;
+do $$
+declare t record;
+begin
+  for t in
+    select schemaname, tablename from pg_tables
+    where schemaname in ('raw','core','audit','analytics')
+  loop
+    execute format('alter table %I.%I enable row level security', t.schemaname, t.tablename);
+  end loop;
+end $$;
 
-revoke all on all tables in schema raw   from anon, authenticated;
-revoke all on all tables in schema core  from anon, authenticated;
-revoke all on all tables in schema audit from anon, authenticated;
+revoke all on all tables in schema raw       from anon, authenticated;
+revoke all on all tables in schema core      from anon, authenticated;
+revoke all on all tables in schema audit     from anon, authenticated;
+revoke all on all tables in schema analytics from anon, authenticated;
+revoke usage on schema raw, core, audit from anon, authenticated;
 
--- The dashboard reads analytics only, and only select. Grants for the views
--- themselves are issued in 002_views.sql once the views exist.
-grant usage on schema analytics to anon, authenticated;
+grant usage on schema api to anon, authenticated;

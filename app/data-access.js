@@ -1,138 +1,209 @@
-/* ===========================================================================
-   Data access layer (spec §26)
+/* Data access layer.
 
-   Every page calls these functions and nothing else. No component reaches
-   past this file for a number, and no KPI is re-derived here — the formulas
-   live once, in the ETL and in the matching analytics views.
+   Pages call these functions and nothing else. No KPI is derived here — the
+   formulas live once, in the ETL and in the matching analytics views, and this
+   file only selects and shapes.
 
-   Today the source is the curated payload the ETL emits. When a Supabase
-   project is live, only the SOURCE block below changes: each function keeps
-   its name, arguments and return shape, because the analytics views were
-   written to return exactly these columns.
+   Today the source is the curated payload. When a Supabase project is live,
+   only the SOURCE block changes; every function keeps its name, arguments and
+   return shape, because api.* was written to return these columns:
 
-       const { data } = await supabase
-         .from('vw_pos_market_monthly')
-         .select('*')
-         .eq('definition_id', definitionId);
-
-   =========================================================================== */
+     const { data } = await supabase.from('overview_monthly')
+       .select('*').eq('definition_id', id).order('year_month');
+*/
 (function (global) {
   'use strict';
 
-  // ---- SOURCE ------------------------------------------------------------
+  // ------------------------------------------------------------- SOURCE
   const DB = global.KPI_DATA;
   if (!DB) throw new Error('data.js did not load');
-
   const DEFAULT_DEF = 'pos_rm_allcards';
 
-  // ---- helpers -----------------------------------------------------------
-  function byKey(list, key) {
-    const out = {};
-    list.forEach(function (r) { out[r[key]] = r; });
-    return out;
+  function index(list, key) {
+    const o = {};
+    (list || []).forEach(function (r) { o[r[key]] = r; });
+    return o;
   }
+  const DEFS = index(DB.definitions, 'metric_key');
+  const KPI = index(DB.kpi_registry, 'kpi_id');
+  const KPI_STATUS = index(DB.kpi_status, 'kpi_id');
+  const SOURCES = index(DB.sources, 'source_id');
+  const VERSIONS = {};
+  (DB.source_versions || []).forEach(function (v) { VERSIONS[v.source_id] = v; });
 
-  function latestOf(rows, field) {
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i][field] !== null && rows[i][field] !== undefined) return rows[i];
-    }
-    return null;
-  }
-
-  // ---- public API --------------------------------------------------------
   const API = {
-
     meta: function () { return DB.meta; },
 
-    /* Every POS universe BQK publishes, so the UI can name the active one. */
-    getDefinitions: function () { return DB.definitions; },
-
-    getDefinition: function (key) {
-      return DB.definitions.filter(function (d) { return d.metric_key === key; })[0];
+    // ---- definitions -----------------------------------------------------
+    getDefinitions: function () {
+      return DB.definitions.filter(function (d) {
+        return d.metric_key !== 'pos_terminals_annual';
+      });
     },
-
+    getDefinition: function (key) { return DEFS[key] || DEFS[DEFAULT_DEF]; },
     defaultDefinition: function () { return DEFAULT_DEF; },
 
-    /* Page 1 — headline KPIs for the selected universe and period. */
+    // ---- KPI registry ----------------------------------------------------
+    getKpi: function (id) { return KPI[id] || null; },
+    getKpiStatus: function (id) { return KPI_STATUS[id] || null; },
+    getMethodology: function () {
+      return (DB.kpi_registry || []).map(function (k) {
+        const s = KPI_STATUS[k.kpi_id] || {};
+        return Object.assign({}, k, { status: s.status, reason: s.reason,
+                                      required_input: s.required_input });
+      });
+    },
+
+    /** Everything the source drawer needs for one KPI, resolved to its file. */
+    getProvenance: function (kpiId, sourceId, extra) {
+      const k = KPI[kpiId] || {};
+      const st = KPI_STATUS[kpiId] || {};
+      const src = SOURCES[sourceId] || {};
+      const ver = VERSIONS[sourceId] || {};
+      return Object.assign({
+        title: k.display_name || kpiId,
+        formula: k.sql_formula,
+        numerator: k.numerator,
+        denominator: k.denominator,
+        definition: k.business_definition,
+        aggregation: k.aggregation_rule,
+        comparison: k.valid_comparison_method,
+        coverage: k.source_requirements,
+        limitations: k.known_limitations,
+        institution: src.institution,
+        publication: src.official_title || src.dataset_name,
+        url: src.source_url,
+        file: ver.original_filename || ver.source_table,
+        version: ver.sha256_hash ? ver.sha256_hash.slice(0, 16) : null,
+        downloaded: ver.downloaded_at ? ver.downloaded_at.slice(0, 10) : null,
+        parser: ver.parser_version,
+        status: st.status,
+        statusReason: st.reason
+      }, extra || {});
+    },
+
+    // ---- 01 overview -----------------------------------------------------
+    getPOSMarketTrend: function (defKey) {
+      return DB.pos_monthly[defKey || DEFAULT_DEF] || [];
+    },
     getExecutiveOverview: function (defKey, yearMonth) {
       const key = defKey || DEFAULT_DEF;
       const rows = DB.pos_monthly[key] || [];
       if (!rows.length) return null;
-      const idx = yearMonth
-        ? rows.findIndex(function (r) { return r.year_month === yearMonth; })
-        : rows.length - 1;
-      const cur = rows[idx < 0 ? rows.length - 1 : idx];
-      const withTx = latestOf(rows.slice(0, (idx < 0 ? rows.length : idx + 1)), 'tx_count');
-      return {
-        definition: API.getDefinition(key),
-        period: cur.year_month,
-        current: cur,
-        latestWithTransactions: withTx,
-        signal: DB.signals[key] || null
-      };
+      let row = null;
+      if (yearMonth) {
+        row = rows.filter(function (r) { return r.year_month === yearMonth; })[0] || null;
+      }
+      if (!row) {
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (!UI.isNil(rows[i].tx_count)) { row = rows[i]; break; }
+        }
+      }
+      return { definition: DEFS[key], period: row && row.year_month,
+               current: row, signal: DB.signals[key] || null };
+    },
+    getMarketSignals: function (defKey) { return DB.signals[defKey || DEFAULT_DEF] || null; },
+
+    /** Available periods for the command bar, newest first. */
+    getPeriods: function (defKey) {
+      return (DB.pos_monthly[defKey || DEFAULT_DEF] || [])
+        .filter(function (r) { return !UI.isNil(r.tx_count); })
+        .map(function (r) { return r.year_month; }).reverse();
     },
 
-    /* Page 1 — the full monthly series behind the charts. */
-    getPOSMarketTrend: function (defKey) {
-      return DB.pos_monthly[defKey || DEFAULT_DEF] || [];
+    /** Period-vs-period comparison, only where both months exist. */
+    compare: function (defKey, aYm, bYm) {
+      const rows = DB.pos_monthly[defKey || DEFAULT_DEF] || [];
+      const by = index(rows, 'year_month');
+      const a = by[aYm], b = by[bYm];
+      if (!a || !b) return null;
+      function d(k) {
+        if (UI.isNil(a[k]) || UI.isNil(b[k]) || !b[k]) return null;
+        return a[k] / b[k] - 1;
+      }
+      return { a: a, b: b, deltas: {
+        terminal_stock: d('terminal_stock'), tx_count: d('tx_count'),
+        tx_value: d('tx_value'), tx_per_avg_pos: d('tx_per_avg_pos'),
+        value_per_avg_pos: d('value_per_avg_pos'), avg_ticket: d('avg_ticket') } };
     },
 
-    /* Page 1 — computed, never hard-coded (spec §11). */
-    getMarketSignals: function (defKey) {
-      return DB.signals[defKey || DEFAULT_DEF] || null;
-    },
-
-    /* Page 2 — channel mix with shares, plus card stock composition. */
+    // ---- 02 payments -----------------------------------------------------
     getPaymentBehaviour: function () {
-      return {
-        channelMix: DB.channel_mix,
-        cards: DB.cards
-      };
+      return { channelMix: DB.channel_mix, cards: DB.cards };
+    },
+    /** Last month in which a given channel actually reports the field. */
+    lastMonthWith: function (channel, field) {
+      const mix = DB.channel_mix;
+      for (let i = mix.length - 1; i >= 0; i--) {
+        const c = mix[i].channels[channel];
+        if (c && !UI.isNil(c[field])) return mix[i];
+      }
+      return null;
     },
 
-    /* Page 3 / 4 — the seven cities BQK names, for the one shared year. */
-    getMunicipalityIntelligence: function () { return DB.geo; },
+    // ---- 03 / 04 geography ----------------------------------------------
+    getGeographicFootprint: function () { return DB.geo; },
+    getEconomicContext: function () {
+      return DB.geo.filter(function (g) { return !UI.isNil(g.taxpayers); });
+    },
 
-    /* Page 4 / 5 — ATK economic activity. */
+    // ---- 05 sectors ------------------------------------------------------
     getSectorIntelligence: function (opts) {
       const o = opts || {};
-      if (o.municipality) {
-        return DB.atk_muni_sector_year.filter(function (r) {
-          return r.municipality === o.municipality && (!o.year || r.year === o.year);
-        });
-      }
-      return DB.atk_sector_year.filter(function (r) {
-        return !o.year || r.year === o.year;
-      });
+      const rows = o.municipality && o.municipality !== 'All'
+        ? DB.atk_muni_sector_year.filter(function (r) { return r.municipality === o.municipality; })
+        : DB.atk_sector_year;
+      return rows.filter(function (r) { return !o.year || r.year === o.year; });
     },
-
     getMunicipalityTotals: function (year) {
       return DB.atk_muni_year.filter(function (r) { return !year || r.year === year; });
     },
-
-    getNationalTurnoverMonthly: function () { return DB.atk_national_month; },
-
     getSectorDictionary: function () { return DB.sectors; },
-
     atkYears: function () {
-      const ys = {};
-      DB.atk_sector_year.forEach(function (r) { ys[r.year] = 1; });
-      return Object.keys(ys).map(Number).sort();
+      const s = {};
+      DB.atk_sector_year.forEach(function (r) { s[r.year] = 1; });
+      return Object.keys(s).map(Number).sort();
     },
 
-    /* Page 6 — provenance and quality, for the management-facing panel. */
+    // ---- 06 assurance ----------------------------------------------------
     getDataStatus: function () {
       const q = DB.quality || [];
+      const st = DB.kpi_status || [];
       return {
         meta: DB.meta,
         sources: DB.sources,
+        versions: DB.source_versions,
         checks: q,
+        reconciliation: DB.reconciliation || [],
+        coverage: DB.coverage || [],
+        kpiStatus: st,
         passed: q.filter(function (c) { return c.status === 'passed'; }).length,
         failed: q.filter(function (c) { return c.status === 'failed'; }).length,
         high: q.filter(function (c) {
-          return c.status === 'failed' && c.severity === 'high';
-        }).length
+          return c.status === 'failed' && c.severity === 'high'; }).length,
+        blocked: st.filter(function (s) { return s.status === 'BLOCKED'; }).length,
+        warnings: st.filter(function (s) { return s.status === 'WARNING'; }).length
       };
+    },
+
+    // ---- market pulse ----------------------------------------------------
+    /** 3–5 material, validated movements. Facts only. */
+    getMarketPulse: function (defKey) {
+      const sig = DB.signals[defKey || DEFAULT_DEF];
+      if (!sig) return [];
+      const out = [];
+      function add(v, text, invertGood) {
+        if (UI.isNil(v)) return;
+        const dir = Math.abs(v) < 0.005 ? 'flat' : (v > 0 ? 'up' : 'down');
+        out.push({ dir: dir, text: text, value: UI.signedPct(v),
+                   good: invertGood ? v < 0 : v > 0 });
+      }
+      add(sig.usage_growth, 'POS transaction volume');
+      add(sig.infrastructure_growth, 'POS terminal network');
+      add(sig.productivity_growth, 'Transactions per terminal');
+      add(sig.average_ticket_growth, 'Average ticket size', true);
+      add(sig.value_productivity_growth, 'Value processed per terminal');
+      return out.slice(0, 5);
     }
   };
 
