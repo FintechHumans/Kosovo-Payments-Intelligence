@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kosovo Merchant &amp; Payments Intelligence</title>
+<meta name="description" content="Public market intelligence on the Kosovo POS and payments market, built from Central Bank of Kosovo and Tax Administration of Kosovo open data.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=1.1">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="mark">Kosovo Merchant &amp; Payments Intelligence</span>
+    <span class="sub">Public data · BQK + ATK</span>
+  </div>
+  <span class="spacer"></span>
+  <button class="status-chip" id="status-chip" title="Open data status">
+    <span class="dot" id="status-dot"></span>
+    <span id="status-text">loading…</span>
+  </button>
+</header>
+
+<nav class="pages" role="tablist" aria-label="Dashboard pages">
+  <button data-page="overview"    role="tab" aria-selected="true">Executive Overview</button>
+  <button data-page="behaviour"   role="tab" aria-selected="false">Payment Behaviour</button>
+  <button data-page="geography"   role="tab" aria-selected="false">Geographic Footprint</button>
+  <button data-page="opportunity" role="tab" aria-selected="false">Economic Opportunity</button>
+  <button data-page="sectors"     role="tab" aria-selected="false">Sector Intelligence</button>
+  <button data-page="status"      role="tab" aria-selected="false">Data Status &amp; Method</button>
+</nav>
+
+<div class="filters">
+  <div class="field">
+    <label for="f-universe">POS transaction universe</label>
+    <select id="f-universe"></select>
+  </div>
+  <div class="field">
+    <label for="f-year">Year</label>
+    <select id="f-year"></select>
+  </div>
+  <div class="field">
+    <label for="f-muni">Municipality</label>
+    <select id="f-muni"></select>
+  </div>
+  <div class="universe" id="universe-banner">
+    <span class="tag">Active universe</span>
+    <span class="txt" id="universe-text"></span>
+  </div>
+</div>
+
+<main>
+  <section class="page active" id="page-overview"    role="tabpanel"></section>
+  <section class="page"        id="page-behaviour"   role="tabpanel"></section>
+  <section class="page"        id="page-geography"   role="tabpanel"></section>
+  <section class="page"        id="page-opportunity" role="tabpanel"></section>
+  <section class="page"        id="page-sectors"     role="tabpanel"></section>
+  <section class="page"        id="page-status"      role="tabpanel"></section>
+</main>
+
+<footer class="foot">
+  <p><strong>Sources.</strong> Central Bank of the Republic of Kosovo — monthly payment system
+  report, Table 15 payment system time series, and <em>Use of Bank Cards in Kosovo</em>
+  (September 2025 edition). Tax Administration of Kosovo — Open Data, Qarkullimi 2019–2025.</p>
+  <p>Phase 1 uses public data only. It contains no internal NLB information and no
+  taxpayer-level record. Bank-level market share cannot be derived from any public source
+  and is deliberately absent — see Data Status &amp; Method.</p>
+</footer>
+
+<script src="data.js?v=1.1"></script>
+<script src="data-access.js?v=1.1"></script>
+<script src="charts.js?v=1.1"></script>
+<script src="app.js?v=1.1"></script>
+</body>
+</html>
