@@ -5,12 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kosovo Merchant &amp; Payments Intelligence</title>
 <meta name="description" content="Public market intelligence on the Kosovo POS and payments market, built from Central Bank of Kosovo and Tax Administration of Kosovo open data.">
+<meta name="theme-color" content="#1a1f36">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%231a1f36'/%3E%3Crect x='7' y='13' width='18' height='11' rx='1.5' fill='none' stroke='%23b8960c' stroke-width='2'/%3E%3Cpath d='M7 17h18' stroke='%23b8960c' stroke-width='2'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=2.0">
+<link rel="stylesheet" href="styles.css?v=3.1">
 </head>
-<body>
+<body class="simple">
 
 <div class="boot" role="status" aria-live="polite">
   <div class="inner">
@@ -23,10 +25,9 @@
 /* Installed before anything else, so it works no matter which file fails.
 
    The overlay above covers the page until the app dismisses it. A script that
-   throws while it is still parsing — a 404 on a payload, a stale cached file —
-   never reaches DOMContentLoaded, so a handler registered inside the app would
-   never run and the viewer would sit on a loading screen indefinitely. This
-   catches that case from outside. */
+   throws while it is still parsing never reaches DOMContentLoaded, so a handler
+   registered inside the app would never run and the viewer would sit on a
+   loading screen indefinitely. This catches that case from outside. */
 (function () {
   var failed = false;
   function fail(msg) {
@@ -47,24 +48,18 @@
       String(msg).replace(/[<>&]/g, '') + '</pre>' +
       '<button onclick="location.reload(true)" style="background:#b8960c;border:0;' +
       'color:#1a1f36;font:600 12px/1 Inter,sans-serif;letter-spacing:.1em;' +
-      'text-transform:uppercase;padding:11px 17px;cursor:pointer">Reload</button>' +
+      'text-transform:uppercase;padding:12px 18px;cursor:pointer">Reload</button>' +
       '</div>';
   }
   window.__bootFail = fail;
-
   window.addEventListener('error', function (e) {
     if (e && e.target && e.target.tagName === 'SCRIPT') {
       fail('Could not load ' + (e.target.src || 'a required file'));
-    } else {
-      fail((e && e.message) || 'Unknown error');
-    }
+    } else { fail((e && e.message) || 'Unknown error'); }
   }, true);
-
   window.addEventListener('unhandledrejection', function (e) {
     fail((e && e.reason && e.reason.message) || 'Unhandled promise rejection');
   });
-
-  /* Last resort: if nothing dismissed the overlay, say so rather than spin. */
   setTimeout(function () {
     var boot = document.querySelector('.boot');
     if (boot && !boot.classList.contains('gone')) {
@@ -76,80 +71,83 @@
 
 <div class="app">
 
-  <nav class="rail" aria-label="Modules">
-    <span class="rail-mark">KOSOVO · PAYMENTS INTELLIGENCE</span>
-    <div class="rail-nav" role="tablist"></div>
+  <nav class="rail" aria-label="Sections">
+    <button class="rail-brand" id="brand" aria-label="Go to overview">
+      <span class="m">Kosovo Payments</span>
+      <span class="s">Intelligence</span>
+    </button>
+
+    <div class="rail-group">
+      <span class="label">Explore</span>
+      <div class="rail-nav" id="nav-primary"></div>
+    </div>
+
+    <div class="rail-group">
+      <span class="label">Assurance</span>
+      <div class="rail-nav secondary" id="nav-secondary"></div>
+    </div>
+
     <div class="rail-foot">
-      <button class="mode-toggle" id="btn-exec" aria-pressed="false"
-              title="Switch between analyst and executive presentation">Executive</button>
+      <button class="rail-status" id="status">
+        <span class="dot" id="status-dot"></span>
+        <span id="status-text">checking…</span>
+      </button>
     </div>
   </nav>
 
   <div class="main">
 
-    <header class="command">
-      <div class="crumbs">
-        <button class="crumb" type="button">
-          <span class="crumb-k">Geography</span>
-          <span class="crumb-v">Kosovo</span>
-        </button>
-        <span class="crumb-sep">/</span>
-        <button class="crumb" type="button">
-          <span class="crumb-k">Period</span>
-          <span class="crumb-v" id="crumb-period">—</span>
-        </button>
-        <span class="crumb-sep">/</span>
-        <button class="crumb" type="button">
-          <span class="crumb-k">Universe</span>
-          <span class="crumb-v" id="crumb-def">—</span>
-        </button>
-        <button class="crumb" type="button">
-          <span class="crumb-k">Year</span>
-          <span class="crumb-v" id="crumb-year">—</span>
-        </button>
-        <span class="crumb-sep">/</span>
-        <button class="crumb" type="button">
-          <span class="crumb-k">Municipality</span>
-          <span class="crumb-v" id="crumb-muni">All</span>
-        </button>
+    <div class="toolbar" id="toolbar">
+      <div class="filter" id="f-period-wrap">
+        <label class="label" for="f-period">Reporting period</label>
+        <select id="f-period"></select>
+      </div>
+
+      <div class="filter adv" id="f-universe-wrap">
+        <label class="label" for="f-universe">BQK series</label>
+        <select id="f-universe"></select>
+      </div>
+
+      <div class="filter" id="f-year-wrap">
+        <label class="label" for="f-year">Year</label>
+        <select id="f-year"></select>
+      </div>
+
+      <div class="filter" id="f-muni-wrap">
+        <label class="label" for="f-muni">Municipality</label>
+        <select id="f-muni"></select>
       </div>
 
       <span class="spacer"></span>
 
-      <div class="cmd-actions">
-        <span id="meta-line" style="font-size:11.5px;color:var(--ink-3)" class="analyst-only"></span>
-        <button class="btn analyst-only cmd-analyst" id="btn-compare" aria-pressed="false">Compare</button>
-        <button class="btn btn-ghost analyst-only cmd-analyst" id="btn-reset">Reset</button>
-        <button class="status-pill" id="status" aria-label="Open data assurance">
-          <span class="dot" id="status-dot"></span>
-          <span id="status-text">checking…</span>
-        </button>
+      <div class="toolbar-right">
+        <button class="btn btn-quiet adv" id="btn-compare" aria-pressed="false">Compare periods</button>
+        <div class="viewtoggle" role="group" aria-label="Detail level">
+          <button id="btn-simple" aria-pressed="true">Simple</button>
+          <button id="btn-advanced" aria-pressed="false">Advanced</button>
+        </div>
       </div>
-    </header>
+    </div>
 
-    <main class="canvas"></main>
+    <main class="canvas" id="canvas"></main>
 
-    <footer class="foot" style="padding:24px 24px 64px;border-top:1px solid var(--rule);
-                                font-size:11.5px;color:var(--ink-3);max-width:1520px;margin:0 auto">
-      <p style="max-width:94ch;margin-bottom:6px">
-        <strong>Sources.</strong> Central Bank of the Republic of Kosovo — monthly payment system
-        report, Table 15 payment system time series, and <em>Use of Bank Cards in Kosovo</em>
-        (September 2025 edition). Tax Administration of Kosovo — Open Data, Qarkullimi 2019–2025.
-      </p>
-      <p style="max-width:94ch">
-        Phase 1 uses public data only. It contains no internal NLB information and no
-        taxpayer-level record. Bank-level market share cannot be derived from any public
-        source and is deliberately absent.
-      </p>
+    <footer class="foot">
+      <p><strong>Sources.</strong> Central Bank of the Republic of Kosovo — monthly payment
+      system report, Table 15 payment system time series, and <em>Use of Bank Cards in
+      Kosovo</em> (September 2025 edition). Tax Administration of Kosovo — Open Data,
+      Qarkullimi 2019–2025.</p>
+      <p>Public data only. No internal NLB information and no taxpayer-level record.
+      Bank-level market share cannot be derived from any public source and is
+      deliberately absent.</p>
     </footer>
 
   </div>
 </div>
 
 <script src="data.js?v=2.0"></script>
-<script src="lib.js?v=2.1"></script>
+<script src="lib.js?v=3.0"></script>
 <script src="charts.js?v=2.0"></script>
-<script src="data-access.js?v=2.2"></script>
-<script src="app.js?v=2.2"></script>
+<script src="data-access.js?v=3.0"></script>
+<script src="app.js?v=3.1"></script>
 </body>
 </html>
