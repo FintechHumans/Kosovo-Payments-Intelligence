@@ -1,0 +1,46 @@
+name: Deploy dashboard to Pages
+
+# The dashboard is the contents of app/. Pages "deploy from a branch" can only
+# serve the repository root or /docs, so publishing through Actions keeps app/
+# named for what it is and avoids committing a second copy of the payload.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; queued runs wait rather than cancelling a release.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the payload is present
+        run: |
+          test -f app/index.html
+          test -f app/data.js
+          echo "payload $(du -h app/data.js | cut -f1)"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: app
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
