@@ -41,7 +41,13 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_ATK = os.path.join(BASE, 'data', 'raw', 'atk')
 RAW_BQK = os.path.join(BASE, 'data', 'raw', 'bqk')
 CURATED = os.path.join(BASE, 'data', 'curated')
-BQK_BLOB = r"C:\Users\TechStore\Desktop\Cloude projects\BQK\app\_data_blob.js"
+# The BQK monthly and Table 15 series are ingested through the validated parser
+# in the companion BQK repository, which reproduces the published workbooks
+# cell for cell. Point KPI_BQK_BLOB at that project's app/_data_blob.js, or drop
+# the file into data/raw/bqk/ beside the source workbooks it was built from.
+BQK_BLOB = os.environ.get(
+    'KPI_BQK_BLOB',
+    os.path.join(RAW_BQK, '_data_blob.js'))
 
 MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
           'August', 'September', 'October', 'November', 'December']

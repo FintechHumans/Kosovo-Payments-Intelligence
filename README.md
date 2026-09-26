@@ -16,6 +16,24 @@ BQK / ATK official publications
 
 ## Running it
 
+Source files are not committed — `data/raw/` is ignored, because the
+publications belong to BQK and ATK. Fetch them first:
+
+- **ATK** — `Qarkullimi-2019…2025.xlsx` from
+  [atk-ks.org/en/open-data](https://www.atk-ks.org/en/open-data/) into `data/raw/atk/`
+- **BQK** — the monthly payment workbook, the Table 15 series and the annual
+  *Use of Bank Cards in Kosovo* PDF into `data/raw/bqk/`
+
+The BQK monthly and Table 15 series are read through the validated parser in the
+companion BQK repository, which reproduces the published workbooks cell for
+cell. Put its `_data_blob.js` in `data/raw/bqk/`, or point at it directly:
+
+```bash
+export KPI_BQK_BLOB=/path/to/bqk/app/_data_blob.js
+```
+
+Then:
+
 ```bash
 python etl/build.py
 python -m http.server 8790 --directory app
