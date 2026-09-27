@@ -400,9 +400,64 @@
     const floor = byCls['HIGH'] || 0;
     const ceiling = floor + (byCls['REVIEW_REQUIRED'] || 0);
 
+    const ab = DA.getAcceptanceBase();
+
     let h = '<header class="page-head"><h1>Coverage</h1>' +
       '<p class="q">Where acceptance sits below the economy around it, and which parts ' +
       'of that economy can plausibly take a card.</p></header>';
+
+    // How much of the trading economy can present a card at all. This is the
+    // one figure that sizes the constraint the conclusion names, so it opens
+    // the page — with its own weakness written into the sentence.
+    if (ab) {
+      h += headline(
+        'The acceptance base',
+        'Fewer than ' + U.pct(ab.acceptance_ceiling, 0) + ' of trading businesses ' +
+          'can take a card',
+        'Kosovo had <strong>' + U.exact(ab.active_enterprises) + '</strong> active ' +
+        'enterprises in ' + ab.active_year + '. BQK counts <strong>' +
+        U.exact(ab.merchants) + '</strong> card-accepting merchants in ' +
+        U.monthLabel(ab.merchants_period) + '. The business base has grown across ' +
+        'those ' + ab.lag_years + ' years, so this share is the highest the real ' +
+        'figure can be — and the <strong>' + U.exact(ab.not_accepting_floor) +
+        '</strong> businesses outside acceptance are the fewest there can be.',
+        fig('<' + U.pct(ab.acceptance_ceiling, 0), 'of active businesses accept', true) +
+        fig('>' + U.exact(ab.not_accepting_floor), 'businesses cannot') +
+        fig(U.exact(ab.active_enterprises), 'active enterprises, ' + ab.active_year) +
+        (ab.formation ? fig(ab.formation.micro_share.toFixed(1) + '%',
+                            'of new registrations are micro') : ''),
+        '<span>ASK structural business statistics · BQK monthly</span>' +
+        '<span>·</span><span>Three years apart — read as a bound, not a point</span>');
+
+      h += sec('The base itself', 'Active enterprises, ASK structural statistics') +
+        '<div class="card"><div class="card-b" id="cov-base"></div></div>' +
+        (ab.formation ? '<div class="card" style="margin-top:12px">' +
+          '<div class="card-b" style="padding-top:20px">' +
+          '<h3 style="font-size:15px;font-weight:600;margin-bottom:8px">' +
+          'Almost every new business is a very small one</h3>' +
+          '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.65;max-width:62ch">' +
+          U.esc(ab.formation.micro_share.toFixed(1)) + '% of the enterprises ' +
+          'registered in ' + U.monthLabel(ab.formation.period) + ' employ between one ' +
+          'and nine people. Growth in acceptance has to be won one very small ' +
+          'business at a time, which is a different exercise from signing a chain.</p>' +
+          '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:62ch;' +
+          'margin-top:12px">This is the split of businesses <em>registered</em> that ' +
+          'month, not of those already trading. The micro share moves between 98.6% ' +
+          'and 99.8% month to month, which a base of fifty thousand could not do.</p>' +
+          '</div></div>' : '') +
+        disclosure('Why this is a bound rather than a measurement',
+          '<p>' + U.esc(ab.note) + '</p>' +
+          '<p>Active enterprises come from ASK structural business statistics, which ' +
+          'count businesses actually trading rather than businesses that have ' +
+          'registered. That register originates with ARBK, whose own portal forbids ' +
+          'automated collection and reuse of its pages; ASK republishes it as official ' +
+          'statistics, which is why it can be used here at all.</p>' +
+          '<p>A merchant in the BQK count is an acquiring relationship at a bank, so a ' +
+          'business accepting through two banks may appear once in BQK’s unduplicated ' +
+          'count but twice in bank-level reporting. That is why the figure above uses ' +
+          'BQK rather than the KBA merchant total.</p>') +
+        '</section>';
+    }
 
     if (hr && hr.rows.length) {
       const gaps = hr.rows.filter(function (r) { return r.terminals_to_median; });
@@ -503,6 +558,24 @@
         }).join('') + '</tbody></table></div></div></section>';
 
     host.innerHTML = h;
+
+    if (ab && $('#cov-base', host)) {
+      $('#cov-base', host).appendChild(C.line(
+        ab.series.map(function (s) {
+          return { year_month: s.year + '-01', active: s.active }; }), {
+          w: 660, h: 300, labelEvery: 2, baseZero: true,
+          series: [{ key: 'active', color: C.colors.purple, fill: true }],
+          xFmt: function (r) { return r.year_month.slice(0, 4); },
+          yFmt: function (v) { return C.short(v); },
+          hover: function (r) {
+            return { name: r.year_month.slice(0, 4),
+              value: U.exact(r.active) + ' active',
+              delta: 'ASK structural business statistics' }; } }));
+      $('#cov-base', host).insertAdjacentHTML('beforeend',
+        '<div class="sum-legend"><span>Active enterprises. The series ends ' +
+        ab.active_year + '; card-accepting merchants are counted to ' +
+        U.esc(U.monthLabel(ab.merchants_period)) + '.</span></div>');
+    }
 
     const colorOf = function (c) {
       return c === 'HIGH' ? C.colors.pos : c === 'REVIEW_REQUIRED' ? C.colors.neg

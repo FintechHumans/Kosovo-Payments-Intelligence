@@ -170,6 +170,28 @@ def register_sources(atk_years):
              'card acceptance.',
              path=os.path.join(RAW_ASK, 'enterprises_muni.json'),
              source_table='tab05r.px', language='sq')
+    # Active, not merely registered. The same underlying ARBK register, but
+    # published as official statistics and therefore usable: ARBK's own portal
+    # forbids automated collection, copying and reuse of its pages.
+    register('ASK_ACTIVE_ENTERPRISES', 'ASK', 'Statistikat strukturore të bizneseve',
+             'Structural business statistics — active enterprises by section',
+             'https://askdata.rks-gov.net/', 'annual',
+             'Enterprises actually trading, by economic section. This is the '
+             'population a card could be presented to, and the denominator the '
+             'acceptance question needs. The table carries its own total row, which '
+             'is used as the total rather than summing the sections on top of it. '
+             'Annual, and it ends before the BQK merchant series begins.',
+             path=os.path.join(RAW_ASK, 'enterprises_active.json'),
+             source_table='asn01.px', language='sq')
+    register('ASK_ENTERPRISE_SIZE', 'ASK', 'Regjistri statistikor i bizneseve',
+             'Statistical business register — size of enterprises registered monthly',
+             'https://askdata.rks-gov.net/', 'monthly',
+             'Employee size class of the enterprises registered in each month, as '
+             'percentages. A FLOW describing who is registering now, not the size '
+             'structure of businesses already trading: the micro share moves 98.6% '
+             'to 99.8% month to month, which a base of fifty thousand could not do.',
+             path=os.path.join(RAW_ASK, 'enterprises_size.json'),
+             source_table='tab05m.px', language='sq')
     register('ASK_CENSUS', 'ASK', 'Regjistrimi i Popullsisë 2024',
              'Population and Housing Census 2024 — first final results',
              LV.POPULATION_SOURCE['url'], 'annual',
@@ -994,6 +1016,8 @@ def main():
     retail = parse_ask.retail_index(RAW_ASK)
     ents = parse_ask.enterprises_by_municipality(RAW_ASK)
     ents_m = parse_ask.enterprises_monthly(RAW_ASK)
+    ents_active = parse_ask.enterprises_active(RAW_ASK)
+    ents_size = parse_ask.enterprises_size(RAW_ASK)
     cmix = channel_mix_payload()
     cards_p = cards_payload()
     pos_default = pos_monthly('pos_rm_allcards')
@@ -1009,7 +1033,41 @@ def main():
         'headroom': LV.acceptance_headroom(geo, ents),
         'emerging': LV.emerging_channels(cmix),
         'bank_position': LV.bank_position(kba),
+        'acceptance_base': LV.acceptance_base(ents_active, ents_size, pos_default),
     }
+
+    # ---- the acceptance denominator, and what it can and cannot carry
+    ab = lever['acceptance_base']
+    if ab:
+        check('acceptance_base', 'coverage', 'info', True,
+              '%s active enterprises in %s against %s card-accepting merchants in '
+              '%s: at most %.1f%% of the trading base can present a card, and at '
+              'least %s cannot.'
+              % (format(int(ab['active_enterprises']), ','), ab['active_year'],
+                 format(int(ab['merchants']), ','), ab['merchants_period'],
+                 ab['acceptance_ceiling'] * 100,
+                 format(int(ab['not_accepting_floor']), ',')),
+              table='core.fact_ask_enterprises')
+
+        check('acceptance_base_lag', 'coverage', 'warning', ab['lag_years'] == 0,
+              'Active enterprises end %s while merchants run to %s — a %d year gap. '
+              'The business base grew over those years, so the acceptance share is '
+              'an upper bound and the number not accepting is a lower bound. It is '
+              'reported as "fewer than", never as a point estimate.'
+              % (ab['active_year'], ab['merchants_period'], ab['lag_years']),
+              table='core.fact_ask_enterprises',
+              expected='same year', actual='%d years apart' % ab['lag_years'])
+
+        if ab.get('formation'):
+            check('formation_is_a_flow', 'model', 'warning', False,
+                  'The size split is of enterprises REGISTERED in the month, not of '
+                  'those already trading: the micro share moves between 98.6%% and '
+                  '99.8%% month to month, which a base of fifty thousand businesses '
+                  'could not do. It describes who is registering now — %.1f%% micro '
+                  'in %s — and is never read as the structure of the merchant base.'
+                  % (ab['formation']['micro_share'], ab['formation']['period']),
+                  table='core.fact_ask_enterprises',
+                  expected='stock', actual='flow')
 
     # ---- what the KBA extract is, and what it is not
     if kba:
@@ -1122,6 +1180,8 @@ def main():
         retail_index=retail,
         enterprises=ents,
         enterprises_monthly=ents_m,
+        enterprises_active=ents_active,
+        enterprises_size=ents_size,
         definitions=T['dim_metric_definition'],
         sources=T['data_sources'],
         source_versions=T['source_versions'],

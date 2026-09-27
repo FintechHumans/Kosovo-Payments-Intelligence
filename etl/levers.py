@@ -237,6 +237,60 @@ def benchmarks(pos_monthly, cards, population=KOSOVO_POPULATION):
                     'the ECB release, not recomputed.'}
 
 
+def acceptance_base(active, size, pos_monthly):
+    """How much of the trading economy can present a card at all.
+
+    The report's conclusion says the constraint is where a card can be used,
+    but until now it could not size that. This does, with one deliberate
+    weakness stated rather than smoothed: active enterprises are annual and end
+    well before the BQK merchant series begins, so the two sides are years
+    apart. That gap runs one way only — the business base has grown since — so
+    the ratio is a CEILING on acceptance and the shortfall is a floor. It is
+    reported as "fewer than", never as a point estimate.
+    """
+    if not active or not active.get('latest') or not pos_monthly:
+        return None
+    merch = [r for r in pos_monthly if r.get('merchants')]
+    if not merch:
+        return None
+    last = merch[-1]
+    base, base_year = active['latest'], active['latest_year']
+    accept = last['merchants']
+
+    out = {
+        'active_enterprises': base,
+        'active_year': base_year,
+        'merchants': accept,
+        'merchants_period': last['year_month'],
+        'lag_years': int(last['year_month'][:4]) - int(base_year),
+        # ceiling, because the denominator is older than the numerator
+        'acceptance_ceiling': accept / base,
+        'not_accepting_floor': base - accept,
+        'series': [{'year': y, 'active': v}
+                   for y, v in sorted(active['total'].items())],
+        'sections': active['sections'],
+        'note': 'Active enterprises are ASK structural business statistics for %s; '
+                'card-accepting merchants are BQK for %s. The business base has '
+                'grown in between, so the share shown is the highest the true '
+                'figure can be.' % (base_year, last['year_month']),
+    }
+
+    if size and size.get('latest'):
+        m = size['latest']
+        micro = next((v.get(m) for k, v in size['series'].items()
+                      if k.lower().startswith('mikro')), None)
+        out['formation'] = {
+            'period': m,
+            'micro_share': micro,
+            'classes': {k: v.get(m) for k, v in size['series'].items()},
+            'note': 'Share of the enterprises REGISTERED in that month, by employee '
+                    'size class — not the size structure of businesses already '
+                    'trading. Almost all new formation is micro, so growth in '
+                    'acceptance has to be won one very small business at a time.',
+        }
+    return out
+
+
 def acceptance_headroom(geo, enterprises):
     """Where acceptance lags the local economy.
 

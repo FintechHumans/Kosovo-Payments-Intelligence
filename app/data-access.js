@@ -54,6 +54,7 @@
       });
     },
     getBankPosition: function () { return (DB.levers || {}).bank_position || null; },
+    getAcceptanceBase: function () { return (DB.levers || {}).acceptance_base || null; },
     getDefinition: function (key) { return DEFS[key] || DEFS[DEFAULT_DEF]; },
     defaultDefinition: function () { return DEFAULT_DEF; },
 

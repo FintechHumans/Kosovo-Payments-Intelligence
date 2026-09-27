@@ -42,6 +42,19 @@ TABLES = {
                      'Statistikat Afatshkurtëra të Tregtisë me Pakicë mujore', 'tab01.px'],
     'enterprises_muni': ['Statistical business register', 'Quarterly indicators', 'tab05r.px'],
     'enterprises_month': ['Statistical business register', 'Monthly indicators', 'tab02m.px'],
+
+    # Active enterprises, the denominator the report has been missing. The
+    # register counts businesses that have registered; this counts businesses
+    # that are trading, which is the population a card could be presented to.
+    # It is the same underlying ARBK register, but published as statistics and
+    # therefore usable — ARBK's own portal forbids reuse of its pages.
+    'enterprises_active': ['Structural business statistics', 'asn01.px'],
+
+    # Size distribution, monthly and current. A business with one to nine
+    # people is a different acceptance proposition from one with fifty, and
+    # the report has so far treated every business alike.
+    'enterprises_size': ['Statistical business register', 'Monthly indicators',
+                         'tab05m.px'],
 }
 
 
