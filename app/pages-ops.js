@@ -59,21 +59,62 @@
       '<p class="q">How much spending is still settled in cash, and whether cards are ' +
       'taking it.</p></header>';
 
+    const win = cash.window
+      ? U.monthLabel(cash.window[0]) + ' – ' + U.monthLabel(cash.window[1]) : null;
+
     h += headline(
-      'The pool · ' + U.monthLabel(L.year_month),
-      U.money(cash.annualised_cash_pool) + ' is still withdrawn as cash each year',
+      'The pool · ' + (win || U.monthLabel(L.year_month)),
+      U.money(cash.annualised_cash_pool) + ' was withdrawn as cash over the last year',
       'Against ' + U.money(L.pos_value) + ' spent on cards in ' +
         U.monthLabel(L.year_month) + ', ' + U.money(L.atm_value) + ' was taken out of ' +
         'ATMs — <strong>' + L.ratio.toFixed(2) + '×</strong> as much. The ratio was ' +
         F.ratio.toFixed(2) + '× in ' + U.monthLabel(F.year_month) + ', so cards are ' +
         'gaining, steadily.',
-      fig(U.money(cash.value_of_one_point), 'a year, for each percentage point moved to cards', true) +
-      fig(L.ratio.toFixed(2) + '×', 'cash withdrawn per euro on cards') +
+      fig(U.money(cash.value_of_one_point), 'for each percentage point moved to cards', true) +
+      fig((cash.cash_to_pos_t12m ? cash.cash_to_pos_t12m.toFixed(2) : L.ratio.toFixed(2)) +
+          '×', 'cash withdrawn per euro on cards, full year') +
       fig(U.pct(L.card_share_of_the_two, 0), 'of the two channels now on card') +
       fig('€' + L.avg_withdrawal.toFixed(0) + ' / €' + L.avg_card_payment.toFixed(2),
           'average withdrawal against average card payment'),
-      '<span>Withdrawals bound the pool from above — not every euro taken out could ' +
-      'have been spent at a till.</span>');
+      '<span>Twelve months summed, not one month annualised — withdrawals are ' +
+      'seasonal.</span><span>·</span><span>Withdrawals bound the pool from above: ' +
+      'not every euro taken out could have been spent at a till.</span>');
+
+    // Why the headline number moved, and by how much. Stating the method the
+    // figure replaced is cheaper than letting a reader wonder why it fell.
+    if (cash.is_trailing_12m && cash.naive_overstatement > 0.01) {
+      h += sec('Why this is smaller than it was', 'A method correction, not a fall in cash') +
+        '<div class="card"><div class="card-b" style="padding-top:20px">' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        'This pool used to be reported as the latest month multiplied by twelve. ' +
+        'Withdrawals are seasonal, so that projected whichever month happened to be ' +
+        'last across the whole year — on ' + U.monthLabel(L.year_month) + ' it gave ' +
+        '<strong>' + U.money(cash.naive_annualised) + '</strong>, overstating the ' +
+        'twelve-month total by <strong>' + U.pct(cash.naive_overstatement, 1) +
+        '</strong>. The figure above is ' + U.esc(win) + ' summed.</p>' +
+        '</div></div></section>';
+    }
+
+    if (cash.sensitivity) {
+      h += sec('What a shift would be worth', 'Sensitivity — not a forecast') +
+        '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>If this much of the pool moved onto cards</th>' +
+        '<th class="n">Card value gained, a year</th></tr></thead><tbody>' +
+        cash.sensitivity.map(function (s) {
+          return '<tr><td class="strong">+' + s.shift_pp + ' percentage point' +
+            (s.shift_pp > 1 ? 's' : '') + '</td>' +
+            '<td class="n">' + U.money(s.value) + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        disclosure('What this row is and is not',
+          '<p>Arithmetic on the pool, nothing more: the trailing twelve-month ' +
+          'withdrawal total multiplied by a share. It is not a forecast, no ' +
+          'mechanism is implied, and nothing here says such a shift is achievable.</p>' +
+          '<p>The pool itself is an upper bound. Rent, wages and person-to-person ' +
+          'transfers move as cash and could never have been settled at a till, so ' +
+          'the addressable part is smaller than the figure shown — by how much, no ' +
+          'public source says.</p>') +
+        '</section>';
+    }
 
     h += '<div class="kpis">' +
       U.kpiTile({ label: 'Card share of the two channels', value: L.card_share_of_the_two,

@@ -73,15 +73,45 @@ def cash_displacement(channel_mix):
     if not series:
         return None
     first, last = series[0], series[-1]
+
+    # The pool is the last twelve months summed, not the latest month times
+    # twelve. Withdrawals are seasonal -- December and the summer diaspora
+    # months run well above trend -- so annualising whichever month happens to
+    # be last projects that month's season across the whole year. The trailing
+    # window is reported when twelve months exist, and the fallback is named
+    # rather than silently substituted.
+    t12 = series[-12:]
+    have_12 = len(t12) == 12
+    pool = sum(m['atm_value'] for m in t12) if have_12 else last['atm_value'] * 12
+    pos12 = sum(m['pos_value'] for m in t12) if have_12 else last['pos_value'] * 12
+    naive = last['atm_value'] * 12
+
+    # Illustrative only. Moving a point of the cash pool onto cards is an
+    # arithmetic scenario, not a forecast, and not every withdrawn euro could
+    # ever have been spent at a till.
+    sensitivity = [{'shift_pp': pp, 'value': pool * pp / 100.0}
+                   for pp in (1, 3, 5)]
+
     return {
         'series': series,
         'latest': last,
         'first': first,
-        'annualised_cash_pool': last['atm_value'] * 12,
-        'value_of_one_point': last['atm_value'] * 12 * 0.01,
+        'window': [t12[0]['year_month'], t12[-1]['year_month']],
+        'window_months': len(t12),
+        'is_trailing_12m': have_12,
+        'annualised_cash_pool': pool,
+        'pos_value_t12m': pos12,
+        'cash_to_pos_t12m': (pool / pos12) if pos12 else None,
+        # kept so the page can say what the old method would have claimed
+        'naive_annualised': naive,
+        'naive_overstatement': (naive / pool - 1) if pool else None,
+        'value_of_one_point': pool * 0.01,
+        'sensitivity': sensitivity,
         'ratio_change': last['ratio'] - first['ratio'],
-        'note': 'ATM withdrawals bound the cash pool from above: not every euro '
-                'withdrawn could have been spent at a point of sale.'}
+        'note': 'ATM withdrawals over the trailing twelve months, summed rather '
+                'than annualised from one month, because withdrawals are seasonal. '
+                'They bound the cash pool from above: not every euro withdrawn '
+                'could have been spent at a point of sale.'}
 
 
 def card_mix(payments_count, payments_value):

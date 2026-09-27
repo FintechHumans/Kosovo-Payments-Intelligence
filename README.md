@@ -49,7 +49,7 @@ presented, and what each payment is worth.
 | Finding | Measured |
 |---|---|
 | Cards are taking share, not riding growth | Card value +23.1% against retail trade +12.5%; outgrew 7 of the 8 retail activities ASK publishes |
-| The pool that has not moved | €6.08bn a year still leaves ATMs; each point off the cash-to-card ratio is worth €60.8m |
+| The pool that has not moved | €5.09bn left ATMs over the trailing twelve months; each point moved onto cards is worth €50.9m |
 | Most of the economy cannot present a card at all | 48,317 active enterprises in 2023 against 14,049 card-accepting merchants in July 2026 — fewer than 29% |
 | Acceptance, not appetite, is the limit | 24.0% of euro-area terminal density; 14.1% of card payments per inhabitant |
 | Terminals already placed work harder than density suggests | 2,091 payments per terminal per year against 3,563 in the euro area — 58.7%, not 24% |
@@ -394,6 +394,11 @@ it.
 - **Taxpayer counts are averaged, not summed, when rolling months into years.**
   Summing a monthly stock across twelve months would report twelve times the
   real population.
+- **An annual figure is a trailing twelve months, not the latest month × 12.**
+  ATM withdrawals are seasonal, so annualising whichever month happens to be
+  last projects that month's season across the whole year. On the July 2026
+  data that overstated the cash pool by 19.4% — €6.08bn against a true
+  €5.09bn.
 - **A published total row is used, never rebuilt.** ASK's section tables carry
   their own `Gjithsej` row; summing the sections on top of it would double the
   figure.
