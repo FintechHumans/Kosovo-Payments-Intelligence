@@ -37,6 +37,7 @@ import openpyxl
 import mappings as M
 import parse_ask
 import parse_kba
+import verticals as VERT
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -47,7 +48,17 @@ RAW_ASK = os.path.join(BASE, 'data', 'raw', 'ask')
 # Not data/raw: nothing here was downloaded. The KBA extract was supplied as
 # bank totals, so it is committed with the project and carries no file hash.
 SUPPLIED = os.path.join(BASE, 'data', 'supplied')
+# Customs workbooks are ~160,000 rows each and take most of a minute to read,
+# so etl/fetch_dogana.py aggregates them once and the build reads the cache.
+DOGANA_CACHE = os.path.join(BASE, 'data', 'raw', 'dogana', '_parsed.json')
 CURATED = os.path.join(BASE, 'data', 'curated')
+
+
+def load_dogana():
+    if not os.path.exists(DOGANA_CACHE):
+        return None
+    with open(DOGANA_CACHE, encoding='utf-8') as f:
+        return json.load(f)
 # The BQK monthly and Table 15 series are ingested through the validated parser
 # in the companion BQK repository, which reproduces the published workbooks
 # cell for cell. Point KPI_BQK_BLOB at that project's app/_data_blob.js, or drop
@@ -209,6 +220,23 @@ def register_sources(atk_years):
              'being taken on trust.',
              path=os.path.join(RAW_ASK, 'turnover_structure.json'),
              source_table='asn06.px', language='sq')
+    # Kosovo Customs publishes these under its own "Open Data" heading, unlike
+    # ARBK, whose portal forbids automated collection of its pages. Each year
+    # is a separate workbook and each is hashed.
+    dg = load_dogana()
+    for y, meta in sorted((dg or {}).get('sources', {}).items()):
+        register('DOGANA_IMPORT_%s' % y, 'DOGANA',
+                 'Open Data — Importi %s' % y,
+                 'Dogana e Kosovës — Open DATA Import %s' % y,
+                 meta['url'], 'monthly',
+                 'Import lines at ten-digit tariff code, by month and country of '
+                 'origin, regime IM4 only. Aggregated to merchant vertical through '
+                 'mapping %s. A supply-side signal: goods entered the country, '
+                 'which is not the same as goods sold.'
+                 % VERT.VERTICAL_MAPPING_VERSION,
+                 path=os.path.join(BASE, 'data', 'raw', 'dogana', meta['filename']),
+                 source_table='IMPORT', language='sq',
+                 start='%s-01-01' % y, end='%s-12-31' % y)
     register('ASK_CENSUS', 'ASK', 'Regjistrimi i Popullsisë 2024',
              'Population and Housing Census 2024 — first final results',
              LV.POPULATION_SOURCE['url'], 'annual',
@@ -1037,6 +1065,7 @@ def main():
     ents_size = parse_ask.enterprises_size(RAW_ASK)
     ents_closed = parse_ask.enterprises_closed_by_municipality(RAW_ASK)
     ask_turnover = parse_ask.turnover_structure(RAW_ASK)
+    dogana = load_dogana()
     cmix = channel_mix_payload()
     cards_p = cards_payload()
     pos_default = pos_monthly('pos_rm_allcards')
@@ -1056,7 +1085,67 @@ def main():
         'formation': LV.business_formation(ents, ents_closed),
         'turnover_cross_check': LV.turnover_cross_check(sec_year, ask_turnover,
                                                         T['dim_sector']),
+        'import_momentum': (dogana or {}).get('like_for_like'),
     }
+
+    # ---- what the customs file is, and what it can carry
+    if dogana:
+        ys = sorted(dogana['years'])
+        cur = dogana['years'][ys[-1]]
+        cov = cur['coverage']
+        im = lever['import_momentum']
+
+        check('dogana_coverage', 'ingest', 'info', cov['classified_share'] > 0.75,
+              'Customs %s: %.1f%% of import value reached a merchant vertical and '
+              '%.1f%% is consumer-facing. The rest is industrial input, capital '
+              'goods and bulk commodity, excluded rather than counted.'
+              % (ys[-1], cov['classified_share'] * 100,
+                 cov['consumer_facing_share'] * 100),
+              table='raw.dogana_trade')
+
+        check('dogana_ambiguous_chapters', 'model', 'warning', False,
+              'EUR %s of import value sits in tariff chapters that mix uses — '
+              'chapter 84 holds both excavators and laptops — and was left '
+              'unclassified rather than assigned to the chapter\'s likeliest '
+              'vertical. Only four-digit headings resolve those chapters, and any '
+              'code no heading rule claims is counted nowhere.'
+              % format(int(cov['by_rule'].get('ambiguous', 0)), ','),
+              table='core.dim_merchant_vertical',
+              expected='classified', actual='ambiguous chapter')
+
+        check('imports_are_supply_side', 'model', 'warning', False,
+              'Import value is a supply-side signal. Goods entered the country; '
+              'nobody has yet bought them, no retail margin is implied, and the '
+              'figure carries no information about where they were sold or how '
+              'they were paid for. It is used for direction and relative momentum '
+              'between verticals, never as consumer spending.',
+              table='raw.dogana_trade',
+              expected='consumer sales', actual='goods imported')
+
+        if im and im.get('bulk_excluded'):
+            check('imports_bulk_excluded', 'model', 'warning', False,
+                  'The headline import figure excludes %s. Its import line is tanker '
+                  'cargo priced on a world market rather than merchant stock, and '
+                  'carrying it would put a commodity price in a sentence about '
+                  'consumer demand: including it moves the like-for-like figure from '
+                  '%+.1f%% to %+.1f%%.'
+                  % (' and '.join(im['bulk_excluded']),
+                     (im['retail_yoy'] or 0) * 100, (im['total_yoy'] or 0) * 100),
+                  table='core.dim_merchant_vertical',
+                  expected='%+.1f%%' % ((im['retail_yoy'] or 0) * 100),
+                  actual='%+.1f%%' % ((im['total_yoy'] or 0) * 100))
+
+        # Customs publishes only regime IM4 in the open-data file; ASK's trade
+        # statistics cover every import regime. The gap is small and explained,
+        # and saying so is better than presenting two totals that differ.
+        check('dogana_regime_scope', 'reconciliation', 'warning', False,
+              'The customs open-data file carries regime IM4 alone — release for '
+              'free circulation. ASK external trade statistics cover every import '
+              'regime, which is why ASK reports a slightly larger total for the '
+              'same year. The difference is scope, not disagreement, and no figure '
+              'here mixes the two.',
+              table='raw.dogana_trade',
+              expected='all regimes', actual='IM4 only')
 
     # ---- the register tables are flows, and were once read as levels
     if ents:
@@ -1252,6 +1341,11 @@ def main():
         enterprises_size=ents_size,
         enterprises_closed=ents_closed,
         ask_turnover_structure=ask_turnover,
+        verticals=VERT.VERTICALS,
+        vertical_mapping_version=VERT.VERTICAL_MAPPING_VERSION,
+        dogana_coverage=((dogana or {}).get('years', {}) or {}).get(
+            sorted((dogana or {}).get('years', {}))[-1]
+            if (dogana or {}).get('years') else '', {}).get('coverage'),
         definitions=T['dim_metric_definition'],
         sources=T['data_sources'],
         source_versions=T['source_versions'],

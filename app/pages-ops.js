@@ -1170,6 +1170,113 @@
     U.observeReveals(host);
   }
 
+  // =====================================================================
+  // PRODUCT DEMAND — which merchant markets are being stocked
+  //
+  // Customs value is a supply-side signal and the page says so in the first
+  // sentence rather than in a footnote. Goods entered the country; nobody has
+  // bought them yet, and no retail margin is implied.
+  // =====================================================================
+  function renderDemand(host) {
+    const im = DA.getImportMomentum();
+    const cov = DA.getDoganaCoverage();
+    if (!im) {
+      host.innerHTML = U.emptyState('Not available',
+        'No customs data is loaded. Run etl/fetch_dogana.py to prepare it.');
+      return;
+    }
+    const up = im.rows.filter(function (r) { return r.yoy > 0 && !r.bulk_dominated; });
+    const down = im.rows.filter(function (r) { return r.yoy < 0; });
+    const fastest = up.slice().sort(function (a, b) { return b.yoy - a.yoy; })[0];
+
+    let h = '<header class="page-head"><h1>Product demand</h1>' +
+      '<p class="q">Which merchant markets are being stocked, and which are ' +
+      'thinning.</p></header>';
+
+    h += headline(
+      'Customs import value · ' + im.window + ' · ' + im.prior_year + ' against ' +
+        im.current_year,
+      'Retail imports grew ' + U.signedPct(im.retail_yoy) + ' like for like',
+      'Goods worth <strong>' + U.money(im.retail_current) + '</strong> were imported ' +
+      'into consumer-facing categories over the ' + im.months.length + ' months both ' +
+      'years cover, against ' + U.money(im.retail_prior) + ' a year earlier. This is ' +
+      'what merchants are stocking, not what shoppers have bought.',
+      fig(U.signedPct(im.retail_yoy), 'retail imports, like for like', true) +
+      (fastest ? fig(U.signedPct(fastest.yoy), 'fastest: ' +
+                     fastest.name.toLowerCase()) : '') +
+      fig(String(up.length) + ' up / ' + String(down.length) + ' down',
+          'of ' + im.rows.length + ' verticals') +
+      (cov ? fig(U.pct(cov.consumer_facing_share, 0),
+                 'of all imports are consumer-facing') : ''),
+      '<span>Dogana e Kosovës, Open Data — regime IM4</span><span>·</span>' +
+      '<span>A supply-side signal, not consumer spending</span>');
+
+    h += sec('Momentum by merchant vertical', im.prior_year + ' → ' + im.current_year +
+             ', ' + im.window) +
+      '<div class="card"><div class="card-b" id="dem-yoy"></div></div>' +
+      '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+      '<th>Vertical</th><th class="n">' + im.prior_year + '</th>' +
+      '<th class="n">' + im.current_year + '</th><th class="n">Change</th>' +
+      '<th>Largest origins</th></tr></thead><tbody>' +
+      im.rows.map(function (r) {
+        return '<tr><td class="strong">' + U.esc(r.name) +
+          (r.bulk_dominated ? ' <span class="note" style="font-weight:400">bulk</span>'
+                            : '') + '</td>' +
+          '<td class="n">' + U.money(r.prior) + '</td>' +
+          '<td class="n">' + U.money(r.current) + '</td>' +
+          '<td class="n" style="font-weight:600;color:' +
+            (r.yoy >= 0 ? 'var(--pos)' : 'var(--neg)') + '">' +
+            U.signedPct(r.yoy) + '</td>' +
+          '<td style="color:var(--ink-3);font-size:12px">' +
+            U.esc((r.top_origins || []).map(function (o) {
+              return String(o[0]).split(' - ').pop(); }).join(', ')) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>' +
+      disclosure('What this page can and cannot tell you',
+        '<p><strong>An import is not a sale.</strong> These figures count goods ' +
+        'crossing the border. Nobody has bought them, no retail margin is included, ' +
+        'and nothing here says where they were sold or how they were paid for. The ' +
+        'page is for direction and for comparing verticals against each other.</p>' +
+        (im.bulk_excluded && im.bulk_excluded.length
+          ? '<p><strong>' + U.esc(im.bulk_excluded.join(' and ')) + ' sits outside ' +
+            'the headline.</strong> Its import line is tanker cargo priced on a world ' +
+            'market rather than merchant stock, so it moves with the oil price as ' +
+            'much as with demand. Including it would take the like-for-like figure ' +
+            'from ' + U.signedPct(im.retail_yoy) + ' to ' + U.signedPct(im.total_yoy) +
+            '. It stays in the table, marked.</p>' : '') +
+        (cov ? '<p><strong>Coverage.</strong> ' + U.pct(cov.classified_share, 1) +
+          ' of import value reached a vertical. Tariff chapters that mix uses — ' +
+          'chapter 84 holds both excavators and laptops — are resolved only at ' +
+          'four-digit headings, and anything no heading rule claims is counted ' +
+          'nowhere rather than assigned to the likeliest guess.</p>' : '') +
+        '<p><strong>Scope.</strong> The customs open-data file carries regime IM4 ' +
+        'alone, release for free circulation. ASK trade statistics cover every ' +
+        'regime and report a slightly larger total for the same year. That is a ' +
+        'difference of scope, not a disagreement, and no figure here mixes them.</p>') +
+      '</section>';
+
+    host.innerHTML = h;
+
+    $('#dem-yoy', host).appendChild(C.hbars(
+      im.rows.slice().sort(function (a, b) { return b.yoy - a.yoy; })
+        .map(function (r) {
+          return { label: r.name.length > 24 ? r.name.slice(0, 23) + '…' : r.name,
+            value: r.yoy * 100,
+            color: r.bulk_dominated ? C.colors.ink3
+                 : r.yoy >= 0 ? C.colors.pos : C.colors.neg,
+            tip: function () {
+              return { name: r.name, value: U.signedPct(r.yoy),
+                delta: U.money(r.prior) + ' → ' + U.money(r.current) }; } };
+        }), { w: 660, rowH: 28,
+              fmt: function (v) { return (v >= 0 ? '+' : '') + v.toFixed(1) + '%'; },
+              pad: { t: 6, r: 80, b: 6, l: 170 } }));
+    $('#dem-yoy', host).insertAdjacentHTML('beforeend',
+      '<div class="sum-legend"><span>Like-for-like import value, ' + U.esc(im.window) +
+      '</span><span><i style="background:' + C.colors.ink3 +
+      '"></i>Bulk-dominated, outside the headline</span></div>');
+
+    U.observeReveals(host);
+  }
+
   function me_rank(bp, key) {
     return bp.banks.slice().sort(function (x, y) { return y[key] - x[key]; })
       .map(function (b) { return b.code; }).indexOf(bp.focus) + 1;
@@ -1179,5 +1286,6 @@
                       renderPosition: renderPosition, renderCoverage: renderCoverage,
                       renderPenetration: renderPenetration,
                       renderConclusion: renderConclusion,
-                      renderFairShare: renderFairShare };
+                      renderFairShare: renderFairShare,
+                      renderDemand: renderDemand };
 })(window);

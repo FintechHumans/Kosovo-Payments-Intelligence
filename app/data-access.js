@@ -56,6 +56,10 @@
     getBankPosition: function () { return (DB.levers || {}).bank_position || null; },
     getAcceptanceBase: function () { return (DB.levers || {}).acceptance_base || null; },
     getFormation: function () { return (DB.levers || {}).formation || null; },
+    getImportMomentum: function () {
+      return (DB.levers || {}).import_momentum || null; },
+    getVerticals: function () { return DB.verticals || null; },
+    getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
       return (DB.levers || {}).turnover_cross_check || null; },
     getDefinition: function (key) { return DEFS[key] || DEFS[DEFAULT_DEF]; },
