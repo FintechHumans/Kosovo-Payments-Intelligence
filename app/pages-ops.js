@@ -487,14 +487,14 @@
       U.kpiTile({ label: 'Card-addressable', value: floor,
         display: U.money(floor) + ' – ' + U.money(ceiling), small: true,
         foot: U.pct(floor / total, 0) + ' – ' + U.pct(ceiling / total, 0) + ' of turnover' }) +
-      (ent ? U.kpiTile({ label: 'Registered enterprises',
-        value: (ent.by_municipality[muni] || {}).total ||
-               Object.keys(ent.by_municipality).reduce(function (a, k) {
-                 return a + ent.by_municipality[k].total; }, 0),
-        display: U.compact((ent.by_municipality[muni] || {}).total ||
-               Object.keys(ent.by_municipality).reduce(function (a, k) {
-                 return a + ent.by_municipality[k].total; }, 0)),
-        foot: 'ASK register · ' + ent.latest }) : '') +
+      (ent ? (function () {
+        const n = (ent.by_municipality[muni] || {}).count_4q ||
+          Object.keys(ent.by_municipality).reduce(function (a, k) {
+            return a + ent.by_municipality[k].count_4q; }, 0);
+        return U.kpiTile({ label: 'New registrations, 4 quarters',
+          value: n, display: U.compact(n), exact: U.exact(n),
+          foot: 'ASK register · ' + ent.window[0] + ' to ' + ent.window[3] });
+      })() : '') +
       U.kpiTile({ label: 'Sectors', value: rows.length, display: String(rows.length),
         foot: 'NACE sections' }) +
       '</div>';
@@ -502,13 +502,14 @@
     if (hr && hr.rows.length) {
       h += sec('Density by city', 'Terminals against the local economy') +
         '<div class="card"><div class="tbl-wrap"><table><thead><tr><th>City</th>' +
-        '<th class="n">Terminals (est.)</th><th class="n">Enterprises</th>' +
+        '<th class="n">Terminals (est.)</th><th class="n">New registrations, 4q</th>' +
         '<th class="n">Taxpayers</th><th class="n">Addressable</th>' +
         '<th class="n">Per €1m</th><th class="n">To median</th></tr></thead><tbody>' +
         hr.rows.map(function (r) {
           return '<tr><td class="strong">' + U.esc(r.city) + '</td>' +
             '<td class="n">' + U.exact(r.pos_terminals) + '</td>' +
-            '<td class="n">' + (r.enterprises ? U.exact(r.enterprises) : '—') + '</td>' +
+            '<td class="n">' + (r.registrations_4q
+              ? U.exact(r.registrations_4q) : '—') + '</td>' +
             '<td class="n">' + (r.taxpayers ? U.exact(r.taxpayers) : '—') + '</td>' +
             '<td class="n">' + U.money(r.addressable_ceiling) + '</td>' +
             '<td class="n">' + (r.pos_per_eur1m_ceiling
@@ -517,17 +518,72 @@
               ? '<span class="delta down">+' + r.terminals_to_median + '</span>' : '—') +
             '</td></tr>';
         }).join('') + '</tbody></table></div></div>' +
-        disclosure('Two denominators, and why both are shown',
+        disclosure('Why there is no terminals-per-business column',
+          '<p>There is no published count of businesses <em>trading</em> in a given ' +
+          'municipality. ASK’s municipality table counts enterprises <em>registered ' +
+          'in a quarter</em> — a flow, not a population — and its active-enterprise ' +
+          'series exists only nationally, by activity section.</p>' +
+          '<p>Dividing terminals by that flow once produced 9,584 terminals per ' +
+          '1,000 enterprises, roughly ten terminals for every business in town. The ' +
+          'ratio is left out rather than approximated. Registrations are shown as ' +
+          'what they are: a year of business formation.</p>' +
           '<p>ATK counts registered <em>taxpayers</em> — entities filing a return, ' +
-          'including many that accept no cards. ASK counts registered ' +
-          '<em>enterprises</em> in its business register, which is closer to a ' +
-          'merchant population but still includes businesses that never trade.</p>' +
-          '<p>Neither is a count of card-accepting merchants; BQK publishes that only ' +
-          'as a national total. Both are shown so the difference is visible rather ' +
-          'than hidden inside one ratio.</p>' +
+          'including many that accept no cards. Neither column is a count of ' +
+          'card-accepting merchants; BQK publishes that only as a national total.</p>' +
           '<p>Terminal counts remain BQK city estimates read from an annual chart, ' +
           'against ATK municipality turnover. The grain does not match and the ' +
           'comparison is indicative.</p>') +
+        '</section>';
+    }
+
+    const fm = DA.getFormation();
+    if (fm) {
+      const top = fm.rows.slice(0, 12);
+      h += sec('Where businesses form, and where they last',
+               fm.window[0] + ' to ' + fm.window[3]) +
+        '<div class="card"><div class="card-b" id="cov-formation"></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        U.exact(fm.total_registered) + ' enterprises registered across those four ' +
+        'quarters and ' + U.exact(fm.total_closed) + ' closed — <strong>' +
+        Math.round(fm.churn * 100) + ' closures for every 100 registrations</strong>. ' +
+        'Net formation was ' + U.exact(fm.total_net) + ', and ' +
+        U.esc(top[0].municipality) + ' alone accounts for ' +
+        U.pct(top[0].net / fm.total_net, 0) + ' of it.</p>' +
+        '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:64ch;' +
+        'margin-top:12px">Both sides are flows counted over the same four quarters, ' +
+        'so they subtract cleanly. A registration is not a trading business, and a ' +
+        'closure is not always a failure.</p></div></div></section>';
+    }
+
+    const cc = DA.getTurnoverCrossCheck();
+    if (cc) {
+      h += sec('Two institutions, one economy',
+               'ASK against ATK, turnover by section, ' + cc.year) +
+        '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>Section</th><th class="n">ASK</th><th class="n">ATK</th>' +
+        '<th class="n">Gap</th></tr></thead><tbody>' +
+        cc.rows.map(function (r) {
+          return '<tr><td class="strong">' + U.esc(r.section.length > 44
+              ? r.section.slice(0, 43) + '…' : r.section) + '</td>' +
+            '<td class="n">' + r.ask_share.toFixed(2) + '%</td>' +
+            '<td class="n">' + r.atk_share.toFixed(2) + '%</td>' +
+            '<td class="n" style="color:var(--ink-3)">' +
+              (r.gap_pp >= 0 ? '+' : '') + r.gap_pp.toFixed(2) + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<h3 style="font-size:15px;font-weight:600;margin-bottom:8px">' +
+        'This agreement is too good to be a second opinion</h3>' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.65;max-width:64ch">' +
+        U.esc(cc.reading) + '</p></div></div>' +
+        disclosure('How the two were made comparable',
+          '<p>' + U.esc(cc.note) + '</p>' +
+          '<p>The penetration figure at the heart of this report divides BQK card ' +
+          'value by ATK turnover. If ATK’s shape were wrong, so would that be — ' +
+          'which is why it is worth testing, and worth saying plainly when the test ' +
+          'turns out not to be independent.</p>') +
         '</section>';
     }
 
@@ -575,6 +631,34 @@
         '<div class="sum-legend"><span>Active enterprises. The series ends ' +
         ab.active_year + '; card-accepting merchants are counted to ' +
         U.esc(U.monthLabel(ab.merchants_period)) + '.</span></div>');
+    }
+
+    // Registrations and closures were first drawn as a dumbbell, but that chart
+    // labels each row with the percentage change between its two points, and
+    // "+1,432%" for a place with many registrations and few closures means
+    // nothing. Net formation as a bar says the same thing and says it plainly;
+    // the two components stay in the tooltip.
+    if (fm && $('#cov-formation', host)) {
+      const med = fm.rows.map(function (r) { return r.churn; })
+        .filter(function (v) { return v != null; }).sort(function (a, b) {
+          return a - b; });
+      const mid = med.length ? med[Math.floor(med.length / 2)] : null;
+      $('#cov-formation', host).appendChild(C.hbars(
+        fm.rows.slice(0, 12).map(function (r) {
+          return { label: r.municipality, value: r.net,
+            color: (mid != null && r.churn > mid) ? C.colors.neg : C.colors.purpleSoft,
+            tip: function () {
+              return { name: r.municipality,
+                value: U.exact(r.net) + ' net',
+                delta: U.exact(r.registered) + ' registered · ' +
+                       U.exact(r.closed) + ' closed · ' +
+                       Math.round(r.churn * 100) + ' per 100' }; } };
+        }), { w: 660, rowH: 28, fmt: function (v) { return C.short(v); },
+              pad: { t: 6, r: 74, b: 6, l: 140 } }));
+      $('#cov-formation', host).insertAdjacentHTML('beforeend',
+        '<div class="sum-legend"><span>Net formation over four quarters, top 12' +
+        '</span><span><i style="background:' + C.colors.neg +
+        '"></i>Closure rate above the median</span></div>');
     }
 
     const colorOf = function (c) {

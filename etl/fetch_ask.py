@@ -55,6 +55,18 @@ TABLES = {
     # the report has so far treated every business alike.
     'enterprises_size': ['Statistical business register', 'Monthly indicators',
                          'tab05m.px'],
+
+    # Closures, by municipality. The register has only ever been read here from
+    # the arrivals side; this is the other one, and a place where acceptance is
+    # worth winning is a place where businesses survive.
+    'enterprises_closed': ['Statistical business register', 'Quarterly indicators',
+                           'tab11r.px'],
+
+    # Turnover by economic section, from the statistics agency rather than the
+    # tax administration. Two institutions measuring the same quantity by
+    # different methods is worth having: where they agree the figure is firmer,
+    # and where they diverge the report can say so instead of picking one.
+    'turnover_structure': ['Structural business statistics', 'asn06.px'],
 }
 
 

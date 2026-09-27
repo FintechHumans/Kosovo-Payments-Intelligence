@@ -291,12 +291,182 @@ def acceptance_base(active, size, pos_monthly):
     return out
 
 
+def business_formation(registered, closed):
+    """Businesses arriving and leaving, by municipality.
+
+    Both sides are flows over the same four quarters, so they subtract
+    cleanly. This is not a denominator for anything — it is a read on whether
+    a place is one where businesses form and survive, which is a different
+    question from how much turnover it declares.
+    """
+    if not registered or not closed:
+        return None
+    reg = registered['by_municipality']
+    clo = closed['by_municipality']
+    if registered['window'] != closed['window']:
+        return None
+
+    rows = []
+    for m, r in reg.items():
+        c = clo.get(m)
+        if not c:
+            continue
+        born, died = r['count_4q'], c['count_4q']
+        rows.append({'municipality': m, 'registered': born, 'closed': died,
+                     'net': born - died,
+                     # how many survive for each one that closes
+                     'churn': (died / born) if born else None,
+                     'net_per_100': ((born - died) / born * 100) if born else None})
+    if not rows:
+        return None
+    rows.sort(key=lambda x: -x['net'])
+    tb = sum(x['registered'] for x in rows)
+    td = sum(x['closed'] for x in rows)
+    return {'window': registered['window'],
+            'rows': rows,
+            'total_registered': tb, 'total_closed': td, 'total_net': tb - td,
+            'churn': (td / tb) if tb else None,
+            'note': 'Registrations and closures over %s to %s, ASK statistical '
+                    'business register. Both are flows counted over the same four '
+                    'quarters. A registration is not a trading business and a '
+                    'closure is not always a failure.'
+                    % (registered['window'][0], registered['window'][-1])}
+
+
+# ASK publishes eleven broad sections; ATK publishes NACE sections in English
+# after standardisation. Each ASK section is paired with the ATK sectors that
+# make it up. ASK's grouped row covers five sections at once, so it is paired
+# with five. Nothing outside this map is paired: ASK omits finance, agriculture,
+# education, health and public administration entirely, and forcing those into
+# a pairing would manufacture agreement rather than test for it.
+CROSS_CHECK_PAIRS = [
+    ('Tregtia',          ['Wholesale & Retail Trade']),
+    ('Prodhim',          ['Manufacturing']),
+    ('Ndërtimtari', ['Construction']),
+    ('energji elektrike', ['Electricity, Gas']),
+    ('Informacion',      ['Information & Communication']),
+    ('Transporti',       ['Transport & Storage']),
+    ('Akomodimi',        ['Accommodation & Food']),
+    ('Xehtari',          ['Mining & Quarrying']),
+    ('ujë',         ['Water Supply']),
+    ('sherbimeve tjera', ['Real Estate', 'Professional, Scientific',
+                          'Administrative & Support', 'Arts, Entertainment',
+                          'Other Service Activities']),
+]
+
+
+def turnover_cross_check(atk_sector_year, ask_structure, sectors=None):
+    """ATK turnover shares against ASK turnover shares, for the same year.
+
+    Two institutions measure the turnover of the same economy by different
+    methods and different populations. Setting them against each other is worth
+    more than trusting either, because the whole penetration spine divides BQK
+    card value by ATK turnover — if ATK's shape is wrong, so is the spine.
+
+    The comparison is made fair before it is made. ASK covers fewer sections
+    than ATK: no finance, agriculture, education, health or public
+    administration. Comparing raw shares would show ASK uniformly higher purely
+    because its denominator is smaller. So both sides are renormalised over the
+    sections they have in common, and the raw ASK share is kept beside it so
+    the effect of that choice is visible.
+    """
+    if not atk_sector_year or not ask_structure:
+        return None
+    year = ask_structure['year']
+    rows_y = [r for r in atk_sector_year if str(r.get('year')) == str(year)]
+    if not rows_y:
+        return None
+    atk_total = sum(r['turnover'] for r in rows_y if r.get('turnover'))
+    if not atk_total:
+        return None
+
+    def ask_find(needle):
+        for k, v in ask_structure['shares'].items():
+            if needle.lower() in (k or '').lower():
+                return k, v
+        return None, None
+
+    pairs = []
+    for ask_needle, atk_needles in CROSS_CHECK_PAIRS:
+        ak, av = ask_find(ask_needle)
+        if ak is None:
+            continue
+        matched = [r for r in rows_y
+                   if any(n.lower() in (r['sector'] or '').lower()
+                          for n in atk_needles)]
+        if not matched:
+            continue
+        pairs.append({'section': ak,
+                      'atk_sectors': [r['sector'] for r in matched],
+                      'ask_share_raw': av,
+                      'atk_turnover': sum(r['turnover'] for r in matched)})
+    if not pairs:
+        return None
+
+    # renormalise both sides over the sections they share
+    ask_cov = sum(p['ask_share_raw'] for p in pairs)
+    atk_cov = sum(p['atk_turnover'] for p in pairs)
+    for p in pairs:
+        p['ask_share'] = p['ask_share_raw'] / ask_cov * 100.0
+        p['atk_share'] = p['atk_turnover'] / atk_cov * 100.0
+        p['gap_pp'] = p['ask_share'] - p['atk_share']
+        del p['atk_turnover']
+
+    ranked = sorted(pairs, key=lambda r: -abs(r['gap_pp']))
+    worst = abs(ranked[0]['gap_pp'])
+    mean_gap = sum(abs(p['gap_pp']) for p in pairs) / len(pairs)
+
+    # Agreement this tight is itself the finding, and not the flattering one.
+    # Two institutions measuring an economy by survey and by tax return land
+    # within a point or two of each other at best. Landing within a tenth of a
+    # point on every section means they are not measuring separately: ASK's
+    # structural statistics are almost certainly compiled from the same tax
+    # records ATK publishes. So this corroborates the PROCESSING on both sides,
+    # not the underlying figure, and the report must not claim otherwise.
+    shared_source = worst < 0.5
+    return {'year': year,
+            'rows': sorted(pairs, key=lambda r: -r['ask_share']),
+            'widest': ranked[0],
+            'mean_gap_pp': mean_gap,
+            'max_gap_pp': worst,
+            'paired': len(pairs),
+            'of_ask': len(ask_structure['shares']),
+            'ask_coverage_pct': ask_cov,
+            'atk_coverage_pct': atk_cov / atk_total * 100.0,
+            'agrees': worst < 3.0,
+            'likely_shared_source': shared_source,
+            'reading': (
+                'The two land within %.2f points of each other on every section. '
+                'That is closer than two independent measurements of an economy '
+                'ever come, so it is evidence of a shared source rather than of '
+                'independent confirmation: ASK almost certainly compiles these '
+                'statistics from the same tax records. Treat it as a check that '
+                'both sides are processed consistently, not as a second opinion '
+                'on the turnover itself.' % worst) if shared_source else (
+                'The two differ by up to %.1f points. Different methods and '
+                'different populations, so neither is wrong — but the report '
+                'leans on ATK, and this is the size of the doubt.' % worst),
+            'note': 'ASK structural business statistics against ATK declared '
+                    'turnover for %s, both renormalised over the %d sections they '
+                    'share. ASK omits finance, agriculture, education, health and '
+                    'public administration, which together are %.0f%% of ATK '
+                    'turnover; without renormalising, ASK would read higher '
+                    'everywhere for that reason alone.'
+                    % (year, len(pairs), 100.0 - atk_cov / atk_total * 100.0)}
+
+
 def acceptance_headroom(geo, enterprises):
     """Where acceptance lags the local economy.
 
-    Uses ASK registered enterprises where available — a better merchant
-    denominator than ATK taxpayers, which count filers rather than traders.
-    Terminal counts remain BQK city estimates, so the ratio stays indicative.
+    Terminal counts are BQK city estimates against ATK municipality turnover,
+    so the density stays indicative.
+
+    There is deliberately no terminals-per-business ratio here. ASK's
+    municipality table counts businesses REGISTERED in a quarter, not
+    businesses trading, and dividing terminals by it once produced 9,584
+    terminals per 1,000 enterprises. No published source gives an active
+    business count by municipality, so the ratio is left out rather than
+    approximated.
     """
     if not geo:
         return None
@@ -308,10 +478,8 @@ def acceptance_headroom(geo, enterprises):
             'city': g['city'],
             'pos_terminals': g.get('pos_terminals'),
             'taxpayers': g.get('taxpayers'),
-            'enterprises': e['total'] if e else None,
+            'registrations_4q': e['count_4q'] if e else None,
             'addressable_ceiling': g.get('addressable_ceiling'),
-            'pos_per_1000_enterprises': (g['pos_terminals'] / e['total'] * 1000)
-                                        if (e and e['total']) else None,
             'pos_per_eur1m_ceiling': g.get('pos_per_eur1m_ceiling')})
     dens = [r['pos_per_eur1m_ceiling'] for r in rows if r['pos_per_eur1m_ceiling']]
     if not dens:

@@ -192,6 +192,23 @@ def register_sources(atk_years):
              'to 99.8% month to month, which a base of fifty thousand could not do.',
              path=os.path.join(RAW_ASK, 'enterprises_size.json'),
              source_table='tab05m.px', language='sq')
+    register('ASK_ENTERPRISES_CLOSED', 'ASK', 'Regjistri statistikor i bizneseve',
+             'Statistical business register — enterprises closed, by municipality',
+             'https://askdata.rks-gov.net/', 'quarterly',
+             'Enterprises closed per quarter, by municipality and activity section. '
+             'A flow, counted over the same four quarters as the registrations it is '
+             'subtracted from. A closure is not always a failure.',
+             path=os.path.join(RAW_ASK, 'enterprises_closed.json'),
+             source_table='tab11r.px', language='sq')
+    register('ASK_TURNOVER_STRUCTURE', 'ASK', 'Statistikat strukturore të bizneseve',
+             'Structural business statistics — turnover structure by section',
+             'https://askdata.rks-gov.net/', 'annual',
+             'Share of turnover by economic section, as percentages. Measures the '
+             'same quantity ATK measures, by a different method and a different '
+             'institution, so the two can be set against each other rather than one '
+             'being taken on trust.',
+             path=os.path.join(RAW_ASK, 'turnover_structure.json'),
+             source_table='asn06.px', language='sq')
     register('ASK_CENSUS', 'ASK', 'Regjistrimi i Popullsisë 2024',
              'Population and Housing Census 2024 — first final results',
              LV.POPULATION_SOURCE['url'], 'annual',
@@ -1018,6 +1035,8 @@ def main():
     ents_m = parse_ask.enterprises_monthly(RAW_ASK)
     ents_active = parse_ask.enterprises_active(RAW_ASK)
     ents_size = parse_ask.enterprises_size(RAW_ASK)
+    ents_closed = parse_ask.enterprises_closed_by_municipality(RAW_ASK)
+    ask_turnover = parse_ask.turnover_structure(RAW_ASK)
     cmix = channel_mix_payload()
     cards_p = cards_payload()
     pos_default = pos_monthly('pos_rm_allcards')
@@ -1034,7 +1053,56 @@ def main():
         'emerging': LV.emerging_channels(cmix),
         'bank_position': LV.bank_position(kba),
         'acceptance_base': LV.acceptance_base(ents_active, ents_size, pos_default),
+        'formation': LV.business_formation(ents, ents_closed),
+        'turnover_cross_check': LV.turnover_cross_check(sec_year, ask_turnover,
+                                                        T['dim_sector']),
     }
+
+    # ---- the register tables are flows, and were once read as levels
+    if ents:
+        check('register_is_a_flow', 'model', 'warning', False,
+              'The ASK municipality tables count enterprises registered or closed '
+              'IN a quarter, not businesses trading at the end of one: Prishtinë '
+              'runs 649, 766, 759, 749 … 1,599, 942 across consecutive quarters, '
+              'which no stock does. They are summed over four quarters and reported '
+              'as a year of formation. No terminals-per-business ratio is derived '
+              'from them — doing so once gave 9,584 terminals per 1,000 enterprises.',
+              table='core.fact_ask_enterprises',
+              expected='stock', actual='flow')
+
+    fm = lever['formation']
+    if fm:
+        check('business_formation', 'coverage', 'info', True,
+              '%s enterprises registered and %s closed across %s to %s: net %s, with '
+              '%.0f closures for every 100 registrations.'
+              % (format(fm['total_registered'], ','), format(fm['total_closed'], ','),
+                 fm['window'][0], fm['window'][-1], format(fm['total_net'], ','),
+                 (fm['churn'] or 0) * 100),
+              table='core.fact_ask_enterprises')
+
+    cc = lever['turnover_cross_check']
+    if cc:
+        w = cc['widest']
+        check('turnover_cross_check', 'reconciliation', 'high', cc['agrees'],
+              'ASK and ATK turnover shares agree to within %.2f points across all %d '
+              'sections they share in %s. %s'
+              % (cc['max_gap_pp'], cc['paired'], cc['year'], cc['reading']),
+              table='core.fact_atk_turnover',
+              expected='%.2f%% (ASK)' % w['ask_share'],
+              actual='%.2f%% (ATK)' % w['atk_share'],
+              variance_pct=w['gap_pp'], tolerance=3.0)
+
+        if cc['likely_shared_source']:
+            check('cross_check_not_independent', 'reconciliation', 'warning', False,
+                  'The ASK and ATK turnover figures are not an independent pair. '
+                  'Agreement to %.2f points on every section indicates ASK compiles '
+                  'its structural statistics from the same tax records, so this is '
+                  'not a second opinion on the penetration denominator. No public '
+                  'source measures Kosovo turnover independently of the tax '
+                  'administration, and the spine rests on ATK alone.'
+                  % cc['max_gap_pp'],
+                  table='core.fact_atk_turnover',
+                  expected='independent measurement', actual='shared source')
 
     # ---- the acceptance denominator, and what it can and cannot carry
     ab = lever['acceptance_base']
@@ -1182,6 +1250,8 @@ def main():
         enterprises_monthly=ents_m,
         enterprises_active=ents_active,
         enterprises_size=ents_size,
+        enterprises_closed=ents_closed,
+        ask_turnover_structure=ask_turnover,
         definitions=T['dim_metric_definition'],
         sources=T['data_sources'],
         source_versions=T['source_versions'],

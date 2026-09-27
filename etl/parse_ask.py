@@ -84,13 +84,29 @@ def retail_index(raw_dir):
                     'in this table, so none is constructed.'}
 
 
-def enterprises_by_municipality(raw_dir):
-    """Registered enterprises by municipality, activity section and quarter.
+def _qkey(q):
+    # 'TM4 2023' -> (2023, 4)
+    try:
+        a, b = q.split()
+        return (int(b), int(a.replace('TM', '')))
+    except Exception:
+        return (0, 0)
 
-    -> {'quarters': [...], 'latest': quarter,
-        'by_municipality': {muni: {'total': n, 'sections': {section: n}}}}
+
+def _muni_quarter_flow(raw_dir, filename, what):
+    """Read a municipality x quarter x section table as the FLOW it is.
+
+    These tables count events in a quarter, not a population at the end of
+    one. The data says so plainly: Prishtinë runs 649, 766, 759, 749 ... 1,599,
+    942 across consecutive quarters, which no stock of businesses does. Reading
+    one quarter as the municipality's business count is what produced a ratio
+    of 9,584 terminals per 1,000 enterprises — roughly ten terminals for every
+    business in town.
+
+    So a single quarter is never presented as a level. Four consecutive
+    quarters are summed into a year of activity, and the window is named.
     """
-    path = os.path.join(raw_dir, 'enterprises_muni.json')
+    path = os.path.join(raw_dir, filename)
     if not os.path.exists(path):
         return None
     ds = _load(path)['data']
@@ -102,36 +118,54 @@ def enterprises_by_municipality(raw_dir):
     def at(mi, qi, si):
         return vals[(mi * size[1] + qi) * size[2] + si]
 
-    def qkey(q):
-        # 'TM4 2023' -> (2023, 4)
-        try:
-            a, b = q.split()
-            return (int(b), int(a.replace('TM', '')))
-        except Exception:
-            return (0, 0)
-
-    order = sorted(range(len(quarters)), key=lambda i: qkey(quarters[i]))
-    latest_i = order[-1]
+    order = sorted(range(len(quarters)), key=lambda i: _qkey(quarters[i]))
+    window = order[-4:]
+    if len(window) < 4:
+        return None
 
     by_muni = {}
     for mi, m in enumerate(muni):
         secs, total = {}, 0.0
         for si, s in enumerate(sections):
-            v = at(mi, latest_i, si)
-            if v is None:
-                continue
-            v = float(v)
-            secs[s] = v
-            total += v
-        by_muni[m] = {'total': round(total), 'sections': secs}
+            n = 0.0
+            seen = False
+            for qi in window:
+                v = at(mi, qi, si)
+                if v is not None:
+                    n += float(v)
+                    seen = True
+            if seen:
+                secs[s] = n
+                total += n
+        by_muni[m] = {'count_4q': round(total), 'sections': secs}
 
     return {'quarters': [quarters[i] for i in order],
-            'latest': quarters[latest_i],
+            'window': [quarters[i] for i in window],
+            'latest': quarters[order[-1]],
             'sections': sections,
             'by_municipality': by_muni,
-            'note': 'Registered enterprises, ASK statistical business register. '
-                    'A business that has registered is not necessarily trading, '
-                    'and not every trading business accepts cards.'}
+            'is_flow': True,
+            'measure': what,
+            'note': '%s over the four quarters %s to %s. This is a flow: a count of '
+                    'events in a period, not a population. It is never used as a '
+                    'denominator for terminals.'
+                    % (what, quarters[window[0]], quarters[window[-1]])}
+
+
+def enterprises_by_municipality(raw_dir):
+    """Enterprises newly registered per quarter, by municipality and section."""
+    return _muni_quarter_flow(raw_dir, 'enterprises_muni.json',
+                              'Enterprises newly registered')
+
+
+def enterprises_closed_by_municipality(raw_dir):
+    """Enterprises closed per quarter, by municipality and section.
+
+    The register has only ever been read here from the arrivals side. This is
+    the other one, and it is what turns registrations into net formation.
+    """
+    return _muni_quarter_flow(raw_dir, 'enterprises_closed.json',
+                              'Enterprises closed')
 
 
 def enterprises_monthly(raw_dir):
@@ -185,6 +219,44 @@ def _total_row(labels):
         if (name or '').strip().lower().startswith(('gjithsej', 'total')):
             return i
     return None
+
+
+def turnover_structure(raw_dir):
+    """Share of turnover by economic section, ASK structural statistics.
+
+    Published as percentages that sum to a hundred, with their own total row.
+    Its value here is that it measures the same quantity ATK measures, by a
+    different method and a different institution — so the two can be set
+    against each other rather than one being taken on trust.
+    """
+    path = os.path.join(raw_dir, 'turnover_structure.json')
+    if not os.path.exists(path):
+        return None
+    ds = _load(path)['data']
+    dims, size, vals = ds['id'], ds['size'], ds['value']
+    secs, years = _labels(ds, dims[0]), _labels(ds, dims[1])
+    ti = _total_row(secs)
+    order = sorted(range(len(years)), key=lambda i: years[i])
+    latest_i = next((yi for yi in reversed(order)
+                     if vals[(ti or 0) * size[1] + yi] is not None), order[-1])
+
+    shares = {}
+    for si, s in enumerate(secs):
+        if si == ti:
+            continue
+        v = vals[si * size[1] + latest_i]
+        if v is not None:
+            shares[s.strip()] = float(v)
+
+    return {'year': years[latest_i],
+            'years': [years[i] for i in order],
+            'shares': shares,
+            'published_total': (vals[ti * size[1] + latest_i]
+                                if ti is not None else None),
+            'unit': 'percent',
+            'note': 'Share of turnover by economic section, ASK structural business '
+                    'statistics. Percentages as published; the table carries its own '
+                    'total row, which is not summed together with the sections.'}
 
 
 def enterprises_active(raw_dir):

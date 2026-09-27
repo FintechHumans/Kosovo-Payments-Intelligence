@@ -55,6 +55,9 @@
     },
     getBankPosition: function () { return (DB.levers || {}).bank_position || null; },
     getAcceptanceBase: function () { return (DB.levers || {}).acceptance_base || null; },
+    getFormation: function () { return (DB.levers || {}).formation || null; },
+    getTurnoverCrossCheck: function () {
+      return (DB.levers || {}).turnover_cross_check || null; },
     getDefinition: function (key) { return DEFS[key] || DEFS[DEFAULT_DEF]; },
     defaultDefinition: function () { return DEFAULT_DEF; },
 
