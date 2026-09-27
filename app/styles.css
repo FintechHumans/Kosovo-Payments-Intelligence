@@ -583,3 +583,58 @@ body.tool .back-summary{display:block}
   .sum-open{padding:var(--s7) 0 var(--s6)}
   .sum-conc{padding:var(--s6) var(--s4)}
 }
+
+/* ======================= decision cockpit ======================= */
+/* Cards, not a dashboard: each one carries a claim and its limits, so they
+   are sized for reading rather than packed for density. */
+.ck-watch{border:1px solid var(--rule);background:var(--surface);
+  padding:var(--s5) var(--s5) var(--s4);margin-bottom:var(--s6)}
+.ck-watch-head{display:flex;align-items:baseline;gap:var(--s3);flex-wrap:wrap;
+  padding-bottom:var(--s3);border-bottom:1px solid var(--rule)}
+.ck-watch-list{list-style:none;margin:0;padding:0;counter-reset:w}
+.ck-watch-list li{padding:var(--s3) 0;border-bottom:1px solid var(--rule)}
+.ck-watch-list li:last-child{border-bottom:0}
+.ck-w-top{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.ck-w-title{font-weight:600;font-size:14px}
+.ck-w-signal{font-size:11.5px;font-weight:600;letter-spacing:.02em}
+.ck-w-signal.ck-pos{color:var(--pos)} .ck-w-signal.ck-neg{color:var(--neg)}
+.ck-w-signal.ck-warn{color:var(--gold)}
+.ck-w-scale{font-family:var(--mono);font-size:12.5px;color:var(--ink);margin-top:3px}
+.ck-w-why{font-size:12.5px;color:var(--ink-3);line-height:1.55;margin-top:4px;
+  max-width:84ch}
+
+.ck-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--s4)}
+.ck-card{border:1px solid var(--rule);background:var(--surface);
+  padding:var(--s5);display:flex;flex-direction:column}
+.ck-head{display:flex;justify-content:space-between;align-items:flex-start;
+  gap:var(--s3);margin-bottom:var(--s4)}
+.ck-head h3{font-size:15px;font-weight:600;letter-spacing:-.01em}
+.ck-q{font-size:12.5px;color:var(--ink-3);margin-top:3px;line-height:1.5}
+.ck-badges{display:flex;gap:6px;flex:none;align-items:center}
+.ck-conf{font-size:10px;font-weight:700;letter-spacing:.08em;padding:3px 6px;
+  border-radius:2px}
+.ck-conf-pass{background:rgba(20,99,74,.1);color:var(--pos)}
+.ck-conf-warning{background:rgba(140,74,0,.1);color:var(--neg)}
+.ck-conf-blocked{background:rgba(26,31,54,.08);color:var(--ink-3)}
+.ck-level{font-family:var(--mono);font-size:10.5px;font-weight:600;
+  width:19px;height:19px;display:grid;place-items:center;
+  border:1px solid var(--rule-strong);color:var(--ink-2);border-radius:2px}
+.ck-signal{display:flex;align-items:center;gap:7px;font-size:12.5px;
+  font-weight:600;letter-spacing:.01em}
+.ck-dot{width:7px;height:7px;border-radius:50%;flex:none}
+.ck-pos .ck-dot{background:var(--pos)} .ck-pos .ck-signal{color:var(--pos)}
+.ck-neg .ck-dot{background:var(--neg)} .ck-neg .ck-signal{color:var(--neg)}
+.ck-warn .ck-dot{background:var(--gold)} .ck-warn .ck-signal{color:var(--gold)}
+.ck-scale{font-size:18px;font-weight:600;letter-spacing:-.02em;margin:6px 0 var(--s4);
+  line-height:1.3}
+.ck-evidence{list-style:none;margin:0 0 var(--s4);padding:0;
+  border-top:1px solid var(--rule)}
+.ck-evidence li{font-size:12.5px;color:var(--ink-2);padding:7px 0;
+  border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}
+.ck-imp{font-size:13px;color:var(--ink);line-height:1.6}
+.ck-lim{font-size:12px;color:var(--ink-3);line-height:1.55;margin-top:8px}
+.ck-lim strong{color:var(--ink-2)}
+.ck-foot{margin-top:auto;padding-top:var(--s4);font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+
+@media (max-width:900px){ .ck-grid{grid-template-columns:1fr} }

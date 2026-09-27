@@ -21,45 +21,48 @@
   };
 
   const PAGES = [
-    { id: 'home',     n: '01', nav: 'Where the money is', title: 'Where the money is',
+    { id: 'cockpit',  n: '01', nav: 'Decision cockpit',   title: 'Decision cockpit',
+      q: 'What is happening, how big is it, and how confident are we?',
+      group: 'primary', filters: [] },
+    { id: 'home',     n: '02', nav: 'Where the money is', title: 'Where the money is',
       q: 'What is the opportunity, and which way is it moving?',
       group: 'primary', filters: ['period', 'universe'] },
-    { id: 'penetration', n: '02', nav: 'Penetration',    title: 'Penetration',
+    { id: 'penetration', n: '03', nav: 'Penetration',    title: 'Penetration',
       q: 'How much of the economy actually settles on a card?',
       group: 'primary', filters: [] },
-    { id: 'pool',     n: '03', nav: 'Cash & capture',     title: 'Cash and capture',
+    { id: 'pool',     n: '04', nav: 'Cash & capture',     title: 'Cash and capture',
       q: 'How much spending is still cash, and are cards taking it?',
       group: 'primary', filters: [] },
-    { id: 'mix',      n: '04', nav: 'Mix & margin',       title: 'Mix and margin',
+    { id: 'mix',      n: '05', nav: 'Mix & margin',       title: 'Mix and margin',
       q: 'What is happening to the composition behind the volume?',
       group: 'primary', filters: [] },
-    { id: 'coverage', n: '05', nav: 'Coverage',           title: 'Coverage',
+    { id: 'coverage', n: '06', nav: 'Coverage',           title: 'Coverage',
       q: 'Where does acceptance lag the economy around it?',
       group: 'primary', filters: ['year', 'muni'] },
-    { id: 'position', n: '06', nav: 'Position',           title: 'Position',
+    { id: 'position', n: '07', nav: 'Position',           title: 'Position',
       q: 'Where does Kosovo sit against the euro area?',
       group: 'primary', filters: [] },
-    { id: 'demand',   n: '07', nav: 'Product demand',    title: 'Product demand',
+    { id: 'demand',   n: '08', nav: 'Product demand',    title: 'Product demand',
       q: 'Which merchant markets are being stocked, and which are thinning?',
       group: 'primary', filters: [] },
-    { id: 'opportunity', n: '08', nav: 'Merchant opportunity',
+    { id: 'opportunity', n: '09', nav: 'Merchant opportunity',
       title: 'Merchant opportunity',
       q: 'Which merchant verticals can the evidence speak to?',
       group: 'primary', filters: [] },
-    { id: 'fairshare', n: '09', nav: 'Fair share',        title: 'Fair share',
+    { id: 'fairshare', n: '10', nav: 'Fair share',        title: 'Fair share',
       q: 'Who holds the terminals, and who carries the value?',
       group: 'primary', filters: [] },
-    { id: 'conclusion', n: '10', nav: 'What this means', title: 'What this means',
+    { id: 'conclusion', n: '11', nav: 'What this means', title: 'What this means',
       q: 'The evidence, in order, and what it adds up to.',
       group: 'primary', filters: [] },
-    { id: 'network',  n: '11', nav: 'POS network',        title: 'The POS network',
+    { id: 'network',  n: '12', nav: 'POS network',        title: 'The POS network',
       q: 'How large is the network, how hard does it work, and where is it?',
       group: 'secondary', filters: ['period', 'universe'] },
-    { id: 'payments', n: '12', nav: 'Payment behaviour',  title: 'Payment behaviour',
+    { id: 'payments', n: '13', nav: 'Payment behaviour',  title: 'Payment behaviour',
       q: 'How are people paying?', group: 'secondary', filters: ['period'] },
-    { id: 'quality',  n: '13', nav: 'Data quality',       title: 'Data quality',
+    { id: 'quality',  n: '14', nav: 'Data quality',       title: 'Data quality',
       q: 'Can I trust these numbers?', group: 'secondary', filters: [] },
-    { id: 'method',   n: '14', nav: 'Methodology',        title: 'Methodology',
+    { id: 'method',   n: '15', nav: 'Methodology',        title: 'Methodology',
       q: 'How exactly was this calculated?', group: 'secondary', filters: [] }
   ];
   const PAGE = {};
@@ -849,6 +852,7 @@
   // =====================================================================
   const OPS = window.OpsPages || {};
   const RENDER = {
+    cockpit: function () { window.Cockpit.render($('#page-cockpit')); },
     home: renderHome,
     penetration: function () { OPS.renderPenetration($('#page-penetration'), state); },
     conclusion: function () { OPS.renderConclusion($('#page-conclusion'), state); },
@@ -1024,7 +1028,7 @@
       document.body.classList.remove('summary');
       document.body.classList.add('tool');
       sumSection.classList.remove('active');
-      show(page || 'home');
+      show(page || 'cockpit');
       markRail();  // the rail is display:none in summary mode, so it measures 0 there
     }
     function enterSummary() {

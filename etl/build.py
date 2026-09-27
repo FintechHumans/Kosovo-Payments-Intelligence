@@ -39,6 +39,7 @@ import parse_ask
 import parse_kba
 import verticals as VERT
 import opportunity as OPP
+import cockpit as CK
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -1355,6 +1356,8 @@ def main():
         kba=lever['bank_position']))
     T['source_reconciliation'] = RECON
 
+    cockpit = CK.build(lever, dict(bqk_latest='%04d-%02d' % bqk_last))
+
     payload = dict(
         meta=dict(generated_at=RUN_STARTED.isoformat(), parser_version=PARSER_VERSION,
                   bqk_latest='%04d-%02d' % bqk_last, atk_latest='%04d-%02d' % atk_last,
@@ -1372,6 +1375,7 @@ def main():
         ask_turnover_structure=ask_turnover,
         verticals=VERT.VERTICALS,
         opportunity_weights=OPP.DEFAULT_WEIGHTS,
+        cockpit=cockpit,
         vertical_mapping_version=VERT.VERTICAL_MAPPING_VERSION,
         dogana_coverage=((dogana or {}).get('years', {}) or {}).get(
             sorted((dogana or {}).get('years', {}))[-1]

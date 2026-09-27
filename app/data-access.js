@@ -60,6 +60,7 @@
       return (DB.levers || {}).import_momentum || null; },
     getVerticals: function () { return DB.verticals || null; },
     getOpportunity: function () { return (DB.levers || {}).opportunity || null; },
+    getCockpit: function () { return DB.cockpit || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
       return (DB.levers || {}).turnover_cross_check || null; },
