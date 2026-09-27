@@ -1356,6 +1356,38 @@ def main():
         kba=lever['bank_position']))
     T['source_reconciliation'] = RECON
 
+    # PART 38: one date per institution, never a single global "as of".
+    # The sources run to genuinely different months -- customs is ahead of the
+    # central bank, the tax administration is seven months behind it, and the
+    # supplied extract has no period at all -- so a single date would be wrong
+    # for every source but one.
+    def _max_month(series_dict):
+        ms = [m for s in (series_dict or {}).values() for m in s]
+        return max(ms) if ms else None
+
+    freshness = [
+        dict(institution='BQK', latest='%04d-%02d' % bqk_last, grain='month',
+             level='B', note='Monthly payment system report and Table 15.'),
+        dict(institution='ATK', latest='%04d-%02d' % atk_last, grain='month',
+             level='B', note='Declared turnover; %d months behind BQK.' % lag),
+        dict(institution='ASK', latest=_max_month((retail or {}).get('series')),
+             grain='month', level='A',
+             note='Retail index monthly. The active-enterprise series is annual '
+                  'and ends %s, which is why the acceptance figure is a bound.'
+                  % ((ents_active or {}).get('latest_year') or 'earlier')),
+        dict(institution='DOGANA',
+             latest=(sorted((dogana or {}).get('years', {}).values(),
+                            key=lambda y: y['months'][-1])[-1]['months'][-1]
+                     if (dogana or {}).get('years') else None),
+             grain='month', level='A',
+             note='Import lines at tariff-code detail, regime IM4.'),
+        dict(institution='ECB', latest=LV.EURO_AREA['period'], grain='half-year',
+             level='B', note='Euro-area reference, quoted as published.'),
+        dict(institution='KBA', latest=None, grain='unknown', level='C',
+             note='The supplied extract carries no reporting period. Until one is '
+                  'confirmed, nothing built on it is placed on a time axis.'),
+    ]
+
     cockpit = CK.build(lever, dict(bqk_latest='%04d-%02d' % bqk_last))
 
     payload = dict(
@@ -1376,6 +1408,7 @@ def main():
         verticals=VERT.VERTICALS,
         opportunity_weights=OPP.DEFAULT_WEIGHTS,
         cockpit=cockpit,
+        freshness=freshness,
         vertical_mapping_version=VERT.VERTICAL_MAPPING_VERSION,
         dogana_coverage=((dogana or {}).get('years', {}) or {}).get(
             sorted((dogana or {}).get('years', {}))[-1]

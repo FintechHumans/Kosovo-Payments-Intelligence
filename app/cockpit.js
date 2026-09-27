@@ -70,6 +70,25 @@
       '<p class="q">Eight questions, each answered with a signal, its scale, the ' +
       'evidence behind it and what that evidence does not support.</p></header>';
 
+    const fr = DA.getFreshness();
+    if (fr) {
+      h += '<section class="ck-fresh"><div class="ck-fresh-head">' +
+        '<span class="label">Data currency</span>' +
+        '<span class="note">Each source runs to its own month — there is no single ' +
+        'date that is true of all of them</span></div>' +
+        '<div class="ck-fresh-row">' +
+        fr.map(function (f) {
+          return '<div class="ck-fresh-item' + (f.latest ? '' : ' ck-fresh-none') +
+            '" title="' + U.esc(f.note) + '">' +
+            '<div class="ck-fresh-inst">' + U.esc(f.institution) +
+              '<span class="ck-level">' + U.esc(f.level) + '</span></div>' +
+            '<div class="ck-fresh-date">' +
+              U.esc(f.latest ? (f.grain === 'month' ? U.monthLabel(f.latest) : f.latest)
+                             : 'no period') + '</div>' +
+            '</div>';
+        }).join('') + '</div></section>';
+    }
+
     h += '<section class="ck-watch"><div class="ck-watch-head">' +
       '<span class="label">Watchlist</span>' +
       '<span class="note">Ranked by what is weakest or least anchored, not by ' +

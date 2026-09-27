@@ -101,17 +101,41 @@
     }
 
     // ---- conclusion
+    //
+    // Fact, then implication, then limitation — in that order and separated,
+    // so the reader can see where measurement stops and reading begins. The
+    // earlier version opened "Demand is not the constraint", which asserted
+    // something no source here measures: nothing in this report observes
+    // demand, only what was spent and where it could be spent.
     if (pen) {
+      const ab = DA.getAcceptanceBase();
       h += '<section class="sum-conc">' +
-        '<span class="sum-eyebrow">The conclusion</span>' +
-        '<h2>Demand is not the constraint.</h2>' +
-        '<p>Card spending is compounding at ' + (pen.card_cagr * 100).toFixed(0) +
-        '% a year against an economy growing ' + (pen.economy_cagr * 100).toFixed(0) +
-        '%. Nobody needs persuading to use a card. What limits the business is where a ' +
-        'card can be presented, and what each payment is worth.</p>' +
-        '<p class="sum-caveat">No revenue or profit figure appears anywhere in this ' +
-        'report. Merchant charges, interchange and terminal-level activity are published ' +
-        'by no one. Everything here sizes the opportunity; pricing it needs internal data.</p>' +
+        '<span class="sum-eyebrow">What the evidence supports</span>' +
+        '<h2>Card spending is growing faster than the places that can take it.</h2>' +
+
+        '<p class="sum-fact"><strong>The fact.</strong> Card spending compounded at ' +
+        (pen.card_cagr * 100).toFixed(0) + '% a year while the declared economy grew ' +
+        (pen.economy_cagr * 100).toFixed(0) + '%' +
+        (cap ? ', and card value outgrew ' + cap.outgrown + ' of the ' + cap.of +
+               ' retail activities the statistics agency publishes' : '') +
+        '. ' + (ab
+          ? 'Over the same period, fewer than ' + U.pct(ab.acceptance_ceiling, 0) +
+            ' of trading businesses could accept a card at all.'
+          : '') + '</p>' +
+
+        '<p class="sum-imp"><strong>What follows.</strong> The two sides are moving at ' +
+        'different speeds. Spending on cards is rising faster than the economy carrying ' +
+        'it, while acceptance reaches a minority of businesses — so the measured ' +
+        'constraint sits on the acceptance side, not on how much is being spent.</p>' +
+
+        '<p class="sum-caveat"><strong>What this does not establish.</strong> Nothing ' +
+        'here measures demand: the report observes what was spent and where it could be ' +
+        'spent, not what anyone wanted. The acceptance figure compares years that are ' +
+        (ab ? ab.lag_years + ' apart' : 'not aligned') + ', so it is a bound rather than ' +
+        'a reading. And no revenue or profit figure appears anywhere — merchant charges, ' +
+        'interchange and terminal-level activity are published by no one, so everything ' +
+        'here sizes an opportunity without pricing it.</p>' +
+
         '<button class="sum-cta" id="go-tool">Explore the full analysis →</button>' +
         '</section>';
     }

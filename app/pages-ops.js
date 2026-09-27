@@ -621,7 +621,7 @@
         U.esc(cc.reading) + '</p></div></div>' +
         disclosure('How the two were made comparable',
           '<p>' + U.esc(cc.note) + '</p>' +
-          '<p>The penetration figure at the heart of this report divides BQK card ' +
+          '<p>The card-intensity figure at the heart of this report divides BQK card ' +
           'value by ATK turnover. If ATK’s shape were wrong, so would that be — ' +
           'which is why it is worth testing, and worth saying plainly when the test ' +
           'turns out not to be independent.</p>') +
@@ -738,13 +738,13 @@
     if (!p) { host.innerHTML = U.emptyState('Not available', 'No overlapping years.'); return; }
     const F = p.first, L = p.latest;
 
-    let h = '<header class="page-head"><h1>Penetration</h1>' +
+    let h = '<header class="page-head"><h1>Card intensity of declared turnover</h1>' +
       '<p class="q">How much of the Kosovo economy actually settles on a card — and how ' +
       'fast that is changing.</p></header>';
 
     h += headline(
       'ATK × BQK × ASK · ' + F.year + ' → ' + L.year,
-      'Card penetration has doubled, and 94% of the economy still settles elsewhere',
+      'Card intensity has doubled, and 94% of declared turnover still settles elsewhere',
       'The declared economy grew <strong>' + p.economy_multiple.toFixed(2) + '×</strong> ' +
       'over ' + p.years + ' years. Card value grew <strong>' + p.card_multiple.toFixed(2) +
       '×</strong> — ' + p.card_faster_by.toFixed(1) + ' times faster. So the share of ' +
@@ -761,10 +761,16 @@
     h += sec('The two curves', 'Indexed to ' + F.year + ' = 100') +
       '<div class="grid2" id="pen-charts"></div>' +
       disclosure('What this ratio is, and what it is not',
+        '<p><strong>Why it is not called penetration.</strong> Penetration implies a ' +
+        'share of a market a card could actually reach. This denominator is not that: ' +
+        'it is all declared turnover, most of which no card was ever going to settle. ' +
+        'Calling the result penetration would invite it to be read as “94% of the ' +
+        'opportunity is untouched”, which is not what it says. Intensity states the ' +
+        'ratio without implying the missing share is winnable.</p>' +
         '<p>The numerator is card value at Kosovo POS terminals from BQK Table 15. The ' +
         'denominator is all declared business turnover from ATK — which includes ' +
         'wholesale, B2B and government contracting, none of which a card could settle.</p>' +
-        '<p>So the level is a <strong>floor</strong> on penetration of addressable ' +
+        '<p>So the level is a <strong>floor</strong> on intensity against addressable ' +
         'spending, not a retail share. A card cannot capture 100% of it and never will. ' +
         'What the series shows reliably is direction and speed, and both are ' +
         'unambiguous: the ratio has roughly doubled in six years.</p>' +
@@ -895,14 +901,16 @@
       '<p class="q">The evidence, in order, and what it adds up to.</p></header>';
 
     if (p) {
-      h += headline('The conclusion',
-        'Demand is not the constraint. Acceptance and mix are.',
-        'Card value is compounding at <strong>' + (p.card_cagr * 100).toFixed(1) +
-        '%</strong> a year against an economy growing <strong>' +
-        (p.economy_cagr * 100).toFixed(1) + '%</strong>. People are not waiting to be ' +
-        'persuaded to use cards — they are already switching, faster than the economy ' +
-        'is growing, and faster than retail trade itself. What limits the business is ' +
-        'where cards can be used and what each transaction is worth.',
+      h += headline('What the evidence supports',
+        'Card spending is growing faster than the places that can take it.',
+        '<strong>The fact.</strong> Card value compounded at <strong>' +
+        (p.card_cagr * 100).toFixed(1) + '%</strong> a year against an economy growing ' +
+        '<strong>' + (p.economy_cagr * 100).toFixed(1) + '%</strong>, outgrowing retail ' +
+        'trade itself. <strong>What follows:</strong> the two sides move at different ' +
+        'speeds, so the measured constraint sits on the acceptance side rather than on ' +
+        'the amount being spent. <strong>What this does not establish:</strong> nothing ' +
+        'here measures demand — the report observes what was spent and where it could ' +
+        'be spent, never what anyone wanted.',
         fig((p.card_cagr * 100).toFixed(1) + '%', 'card value CAGR', true) +
         fig((p.economy_cagr * 100).toFixed(1) + '%', 'economy CAGR') +
         (bm ? fig(U.pct(bm.levels[1].index, 0), 'of euro-area terminal density') : '') +

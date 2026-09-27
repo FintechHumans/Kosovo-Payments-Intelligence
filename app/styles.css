@@ -638,3 +638,18 @@ body.tool .back-summary{display:block}
   letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
 
 @media (max-width:900px){ .ck-grid{grid-template-columns:1fr} }
+
+/* Data currency: one date per institution. A single "as of" would be wrong
+   for every source but one -- customs runs ahead of the central bank, the tax
+   administration trails it, and the supplied extract has no period at all. */
+.ck-fresh{border:1px solid var(--rule);background:var(--surface-sunk);
+  padding:var(--s4) var(--s5);margin-bottom:var(--s5)}
+.ck-fresh-head{display:flex;align-items:baseline;gap:var(--s3);flex-wrap:wrap;
+  margin-bottom:var(--s3)}
+.ck-fresh-row{display:flex;gap:var(--s5);flex-wrap:wrap}
+.ck-fresh-item{min-width:104px}
+.ck-fresh-inst{display:flex;align-items:center;gap:6px;font-size:10.5px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ck-fresh-date{font-family:var(--mono);font-size:13px;font-weight:600;
+  color:var(--ink);margin-top:3px}
+.ck-fresh-none .ck-fresh-date{color:var(--neg);font-weight:500}

@@ -27,7 +27,7 @@
     { id: 'home',     n: '02', nav: 'Where the money is', title: 'Where the money is',
       q: 'What is the opportunity, and which way is it moving?',
       group: 'primary', filters: ['period', 'universe'] },
-    { id: 'penetration', n: '03', nav: 'Penetration',    title: 'Penetration',
+    { id: 'penetration', n: '03', nav: 'Card intensity',  title: 'Card intensity of declared turnover',
       q: 'How much of the economy actually settles on a card?',
       group: 'primary', filters: [] },
     { id: 'pool',     n: '04', nav: 'Cash & capture',     title: 'Cash and capture',
@@ -221,7 +221,7 @@
 
     // ---- the levers, each sized
     h += '<div class="paths">' +
-      path('02', 'Penetration',
+      path('02', 'Card intensity',
         pen ? U.pct(pen.penetration_first, 2) + ' of turnover settled on card in ' +
               pen.first.year + '; ' + U.pct(pen.penetration_latest, 2) + ' in ' +
               pen.latest.year + '. The one series that needs all three institutions.'

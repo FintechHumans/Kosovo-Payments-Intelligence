@@ -61,6 +61,7 @@
     getVerticals: function () { return DB.verticals || null; },
     getOpportunity: function () { return (DB.levers || {}).opportunity || null; },
     getCockpit: function () { return DB.cockpit || null; },
+    getFreshness: function () { return DB.freshness || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
       return (DB.levers || {}).turnover_cross_check || null; },
