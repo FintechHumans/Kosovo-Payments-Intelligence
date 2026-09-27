@@ -990,11 +990,26 @@
     $('#canvas').insertBefore(sumSection, $('#canvas').firstChild);
     if (window.Summary) window.Summary.render(sumSection);
 
+    // On a phone the rail is a horizontal row several screens wide. The CSS
+    // draws a fade at whichever edge still has sections behind it; this is
+    // what tells it which edge that is. Measured rather than assumed, so a
+    // rail that happens to fit shows no fade at all.
+    const rail = $('.rail');
+    function markRail() {
+      const max = rail.scrollWidth - rail.clientWidth;
+      rail.dataset.x = max <= 2 ? 'none'
+        : rail.scrollLeft <= 1 ? 'start'
+        : rail.scrollLeft >= max - 1 ? 'end' : 'middle';
+    }
+    rail.addEventListener('scroll', markRail, { passive: true });
+    window.addEventListener('resize', markRail);
+
     function enterTool(page) {
       document.body.classList.remove('summary');
       document.body.classList.add('tool');
       sumSection.classList.remove('active');
       show(page || 'home');
+      markRail();  // the rail is display:none in summary mode, so it measures 0 there
     }
     function enterSummary() {
       document.body.classList.add('summary');
