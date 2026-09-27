@@ -1277,6 +1277,132 @@
     U.observeReveals(host);
   }
 
+  // =====================================================================
+  // MERCHANT OPPORTUNITY — evidence per vertical, and how much of it exists
+  //
+  // The score is the smaller half of this page. The larger half is coverage:
+  // how many of the six declared signals a vertical could be judged on at all.
+  // A vertical below the minimum is not scored, because a number printed
+  // beside "data insufficient" gets read while the label gets ignored.
+  // =====================================================================
+  function renderOpportunity(host) {
+    const op = DA.getOpportunity();
+    if (!op) {
+      host.innerHTML = U.emptyState('Not available',
+        'The opportunity model needs the customs layer. Run etl/fetch_dogana.py.');
+      return;
+    }
+    const scored = op.rows.filter(function (r) { return r.score !== null; });
+    const cls = {};
+    op.rows.forEach(function (r) {
+      cls[r.classification] = (cls[r.classification] || 0) + 1; });
+    const colorFor = function (c) {
+      return c === 'HIGH EVIDENCE OPPORTUNITY' ? C.colors.pos
+           : c === 'INVESTIGATE' ? C.colors.purple
+           : c === 'DEVELOPING' ? C.colors.gold
+           : C.colors.ink3;
+    };
+
+    let h = '<header class="page-head"><h1>Merchant opportunity</h1>' +
+      '<p class="q">Which merchant verticals the evidence can speak to — and how ' +
+      'much evidence there actually is.</p></header>';
+
+    h += headline(
+      'Evidence coverage · ' + (op.window || ''),
+      'No vertical carries more than ' + op.max_coverage + ' of ' +
+        Object.keys(op.weights).length + ' signals',
+      '<strong>' + op.scored + ' of ' + op.of + '</strong> verticals have enough ' +
+      'evidence to score at all. The rest report insufficient data, because no ' +
+      'public source sizes a merchant vertical, counts its merchants, or places ' +
+      'terminals within one. What exists is momentum: what is being imported, and ' +
+      'what retail activity is doing.',
+      fig(op.max_coverage + '/' + Object.keys(op.weights).length,
+          'best coverage of any vertical', true) +
+      fig(op.scored + ' / ' + op.of, 'verticals scored') +
+      fig(String(cls['INVESTIGATE'] || 0), 'worth investigating') +
+      fig(String(cls['DATA INSUFFICIENT'] || 0), 'cannot be judged'),
+      '<span>Scores are relative within each signal — a growth rate and a euro ' +
+      'total share no unit</span>');
+
+    h += sec('The signals, and which exist', 'Weights are declared, not hidden') +
+      '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
+      '<th>Signal</th><th>Source</th><th class="n">Default weight</th>' +
+      '<th>Availability by vertical</th></tr></thead><tbody>' +
+      Object.keys(op.weights).map(function (k) {
+        const have = op.rows.filter(function (r) {
+          return (r.signals_present || []).indexOf(k) >= 0; }).length;
+        return '<tr><td class="strong">' + U.esc(op.signal_labels[k] || k) + '</td>' +
+          '<td>' + U.esc(op.signal_sources[k] || '') + '</td>' +
+          '<td class="n">' + U.pct(op.weights[k], 0) + '</td>' +
+          '<td style="font-size:12.5px;color:' +
+            (have ? 'var(--ink-2)' : 'var(--ink-3)') + '">' +
+            (have ? have + ' of ' + op.of + ' verticals'
+                  : U.esc(op.unavailable[k] || 'Not available')) + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>' +
+      '<p class="note" style="margin-top:10px">Weights are renormalised over the ' +
+      'signals a vertical actually has, and the applied weights are carried in the ' +
+      'data rather than assumed from this table.</p></section>';
+
+    h += sec('Verticals', 'Sorted by score; unscored verticals last') +
+      '<div class="card"><div class="card-b" id="opp-bars"></div></div>' +
+      '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+      '<th>Vertical</th><th class="n">Score</th><th class="n">Coverage</th>' +
+      '<th>Classification</th><th class="n">Imports</th><th class="n">Retail</th>' +
+      '<th class="n">ATK turnover</th></tr></thead><tbody>' +
+      op.rows.map(function (r) {
+        return '<tr><td class="strong">' + U.esc(r.name) + '</td>' +
+          '<td class="n" style="font-weight:600">' +
+            (r.score === null ? '—' : r.score.toFixed(1)) + '</td>' +
+          '<td class="n">' + r.coverage + '/' + r.of_signals + '</td>' +
+          '<td style="font-size:12px;font-weight:600;color:' +
+            colorFor(r.classification) + '">' + U.esc(r.classification) + '</td>' +
+          '<td class="n">' + (r.import_yoy === null || r.import_yoy === undefined
+            ? '—' : U.signedPct(r.import_yoy)) + '</td>' +
+          '<td class="n">' + (r.consumer_yoy === null || r.consumer_yoy === undefined
+            ? '—' : U.signedPct(r.consumer_yoy)) + '</td>' +
+          '<td class="n">' + (r.atk_turnover ? U.money(r.atk_turnover) : '—') +
+          '</td></tr>';
+      }).join('') + '</tbody></table></div></div>' +
+      disclosure('Why the coverage is this thin, and what would change it',
+        '<p><strong>ATK cannot size a vertical.</strong> It publishes NACE ' +
+        'sections, and grocery, fashion, electronics, automotive and construction ' +
+        'retail all sit inside one wholesale-and-retail section worth about half ' +
+        'of declared turnover. That section is not apportioned between them by a ' +
+        'guess, so market size is absent for every vertical inside it. Only ' +
+        U.esc((op.atk_exclusive_verticals || []).join(' and ') || 'none') +
+        ' own a section outright, and their turnover is shown as a fact rather ' +
+        'than folded into a score — two observations cannot be ranked against ' +
+        'fifteen.</p>' +
+        '<p><strong>ASK gives momentum, not level.</strong> The retail index ' +
+        'discriminates between activities but carries no euro value, so it can say ' +
+        'which way a vertical is moving and never how large it is.</p>' +
+        '<p><strong>Customs gives value, but not sales.</strong> Import value maps ' +
+        'to verticals cleanly and is the broadest signal here, but goods entering ' +
+        'the country are not goods sold.</p>' +
+        '<p><strong>What would lift coverage:</strong> merchant counts by vertical, ' +
+        'terminals by vertical, or an ATK split of wholesale from retail. None is ' +
+        'published today; all three would come from internal acquiring data.</p>') +
+      '</section>';
+
+    host.innerHTML = h;
+
+    $('#opp-bars', host).appendChild(C.hbars(
+      scored.map(function (r) {
+        return { label: r.name.length > 24 ? r.name.slice(0, 23) + '…' : r.name,
+          value: r.score, color: colorFor(r.classification),
+          tip: function () {
+            return { name: r.name, value: r.score.toFixed(1) + ' · ' + r.classification,
+              delta: 'on ' + r.coverage + ' of ' + r.of_signals + ' signals' }; } };
+      }), { w: 660, rowH: 30, fmt: function (v) { return v.toFixed(1); },
+            pad: { t: 6, r: 74, b: 6, l: 170 } }));
+    $('#opp-bars', host).insertAdjacentHTML('beforeend',
+      '<div class="sum-legend"><span>Only verticals with at least ' +
+      op.min_signals + ' signals are scored — ' + (op.of - op.scored) +
+      ' of ' + op.of + ' are not</span></div>');
+
+    U.observeReveals(host);
+  }
+
   function me_rank(bp, key) {
     return bp.banks.slice().sort(function (x, y) { return y[key] - x[key]; })
       .map(function (b) { return b.code; }).indexOf(bp.focus) + 1;
@@ -1287,5 +1413,6 @@
                       renderPenetration: renderPenetration,
                       renderConclusion: renderConclusion,
                       renderFairShare: renderFairShare,
-                      renderDemand: renderDemand };
+                      renderDemand: renderDemand,
+                      renderOpportunity: renderOpportunity };
 })(window);

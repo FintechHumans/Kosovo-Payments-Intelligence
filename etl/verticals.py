@@ -158,6 +158,65 @@ AMBIGUOUS_CHAPTERS = {'84', '85', '87', '90', '91', '96', '70', '32', '34',
                       '44', '49', '63', '66', '67', '71', '82', '83'}
 
 
+# ------------------------------------------------- ASK retail trade activities
+# ASK publishes eight retail activities as an index. They discriminate between
+# verticals in a way ATK's sections do not, but an index carries no level, so
+# this map supplies momentum and never size.
+ASK_RETAIL = {
+    'dyqane jo t':          'grocery_food',      # non-specialised stores
+    'produkteve ushqimore': 'grocery_food',
+    'karburantit':          'fuel_mobility',
+    'informatike':          'computers_it',
+    'pajisjeve t':          'home_appliance',
+    'kulturore':            'leisure_sport',
+    # 'mallrave të tjerë' covers fashion, beauty, pharmacy and more in one
+    # line, and 'tezga' is market stalls. Neither resolves to a vertical, so
+    # neither is mapped.
+}
+
+# --------------------------------------------------------------- ATK sections
+# ATK publishes NACE sections. Only a few are a vertical on their own; the rest
+# of the consumer economy sits inside one wholesale-and-retail section worth
+# about half of all declared turnover.
+ATK_SECTION = {
+    'Accommodation & Food':   'hospitality',
+    'Human Health':           'healthcare',
+}
+
+# Every vertical whose turnover is buried inside ATK's combined trade section.
+# ATK cannot size any of them individually, and the report says so rather than
+# apportioning the section by a guess.
+ATK_SHARED_SECTION = 'Wholesale & Retail Trade'
+ATK_SHARED_VERTICALS = {
+    'grocery_food', 'fashion', 'beauty', 'electronics', 'mobile_telecom',
+    'computers_it', 'home_appliance', 'furniture_home', 'construction',
+    'tiles_sanitary', 'automotive', 'auto_parts', 'fuel_mobility', 'pharmacy',
+}
+
+
+def ask_retail_vertical(activity_name):
+    low = (activity_name or '').lower()
+    for needle, vid in ASK_RETAIL.items():
+        if needle.lower() in low:
+            return vid
+    return None
+
+
+def atk_section_vertical(sector_name):
+    """-> (vertical_id, 'exclusive'|'shared'|None)
+
+    'shared' means the section exists but covers many verticals at once, so it
+    can describe the section and not the vertical.
+    """
+    s = sector_name or ''
+    for needle, vid in ATK_SECTION.items():
+        if needle.lower() in s.lower():
+            return vid, 'exclusive'
+    if ATK_SHARED_SECTION.lower() in s.lower():
+        return None, 'shared'
+    return None, None
+
+
 def classify(tariff_code):
     """-> (vertical_id or None, how) for a customs tariff code.
 

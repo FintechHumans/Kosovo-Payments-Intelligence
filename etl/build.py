@@ -38,6 +38,7 @@ import mappings as M
 import parse_ask
 import parse_kba
 import verticals as VERT
+import opportunity as OPP
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -1086,6 +1087,9 @@ def main():
         'turnover_cross_check': LV.turnover_cross_check(sec_year, ask_turnover,
                                                         T['dim_sector']),
         'import_momentum': (dogana or {}).get('like_for_like'),
+        'opportunity': OPP.build((dogana or {}).get('like_for_like'), retail,
+                                 VERT.VERTICALS, VERT.ask_retail_vertical,
+                                 sec_year, VERT.atk_section_vertical),
     }
 
     # ---- what the customs file is, and what it can carry
@@ -1138,6 +1142,31 @@ def main():
         # Customs publishes only regime IM4 in the open-data file; ASK's trade
         # statistics cover every import regime. The gap is small and explained,
         # and saying so is better than presenting two totals that differ.
+        op = lever['opportunity']
+        if op:
+            check('opportunity_coverage', 'model', 'warning',
+                  op['max_coverage'] >= 4,
+                  'The opportunity model declares six signals and no vertical '
+                  'carries more than %d of them: %d of %d verticals are scored at '
+                  'all, the rest report DATA INSUFFICIENT. No public source sizes a '
+                  'merchant vertical, counts its merchants or places terminals '
+                  'within it, so the model reports coverage beside every score '
+                  'rather than implying six signals went into it.'
+                  % (op['max_coverage'], op['scored'], op['of']),
+                  table='analytics.merchant_opportunity',
+                  expected='6 signals', actual='%d signals' % op['max_coverage'])
+
+            check('opportunity_atk_cannot_size', 'model', 'warning', False,
+                  'ATK gives an exclusive NACE section to %d verticals (%s). Every '
+                  'other consumer vertical sits inside one wholesale-and-retail '
+                  'section worth about half of declared turnover, which sizes the '
+                  'section and not the vertical. The section is not apportioned, '
+                  'and market size is left out of the score rather than estimated.'
+                  % (len(op['atk_exclusive_verticals']),
+                     ', '.join(op['atk_exclusive_verticals']) or 'none'),
+                  table='core.dim_sector',
+                  expected='size per vertical', actual='one shared section')
+
         check('dogana_regime_scope', 'reconciliation', 'warning', False,
               'The customs open-data file carries regime IM4 alone — release for '
               'free circulation. ASK external trade statistics cover every import '
@@ -1342,6 +1371,7 @@ def main():
         enterprises_closed=ents_closed,
         ask_turnover_structure=ask_turnover,
         verticals=VERT.VERTICALS,
+        opportunity_weights=OPP.DEFAULT_WEIGHTS,
         vertical_mapping_version=VERT.VERTICAL_MAPPING_VERSION,
         dogana_coverage=((dogana or {}).get('years', {}) or {}).get(
             sorted((dogana or {}).get('years', {}))[-1]
