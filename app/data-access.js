@@ -44,11 +44,16 @@
     meta: function () { return DB.meta; },
 
     // ---- definitions -----------------------------------------------------
+    // The series selector offers the universes that actually have a monthly
+    // series behind them. Testing the payload rather than naming exceptions
+    // keeps a new definition — the annual terminal series, the KBA bank
+    // extract — out of a control that could not render it.
     getDefinitions: function () {
       return DB.definitions.filter(function (d) {
-        return d.metric_key !== 'pos_terminals_annual';
+        return (DB.pos_monthly || {})[d.metric_key];
       });
     },
+    getBankPosition: function () { return (DB.levers || {}).bank_position || null; },
     getDefinition: function (key) { return DEFS[key] || DEFS[DEFAULT_DEF]; },
     defaultDefinition: function () { return DEFAULT_DEF; },
 

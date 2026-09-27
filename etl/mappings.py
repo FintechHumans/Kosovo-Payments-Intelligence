@@ -234,4 +234,30 @@ DEFINITIONS = [
          methodology="Annual PDF report.",
          limitations="NOT continuous with the monthly series: 20,913 at end-2024 "
                      "against 25,166 in January 2025. Different universes. Never splice."),
+    # The fourth POS universe. It is the only one with a bank breakdown and the
+    # only one with no period label, which is why nothing built on it is ever
+    # placed on a time axis or divided against a BQK total.
+    dict(metric_key="pos_kba_bank",
+         metric_name="POS Transactions — KBA Bank Reporting",
+         official_name="Shoqata e Bankave të Kosovës — POS TRANSACTIONS",
+         institution="KBA",
+         perspective="ACQUIRING", card_origin="ALL",
+         terminal_location="Kosovo", transaction_type="Card payment at POS",
+         frequency="periodic",
+         universe="POS activity reported by each acquiring bank to the association",
+         cards_coverage="Not stated in the extract",
+         terminal_coverage="Terminals acquired by each reporting bank",
+         geographic_coverage="Kosovo, by bank rather than by place",
+         count_or_value="both", stock_or_flow="both", unit="count / EUR / terminals",
+         is_default=False,
+         methodology="Supplied as an aggregate extract rather than downloaded, so it "
+                     "carries no file hash. The bank columns reconcile exactly to the "
+                     "published ALL Banks column on all four rows, which is what the "
+                     "loader verifies before accepting the file.",
+         limitations="No period label: the terminal count falls between the BQK monthly "
+                     "stock for March and April 2026, but no single BQK window fits all "
+                     "four rows. Matches none of the three BQK series, so shares are "
+                     "computed inside it and never against a BQK total. Merchants are "
+                     "counted per acquiring bank, so the total is relationships rather "
+                     "than distinct merchants. Two banks report nothing."),
 ]

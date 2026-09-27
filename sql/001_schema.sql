@@ -43,12 +43,15 @@ create schema if not exists audit;
 
 create table if not exists audit.data_sources (
     source_id         text primary key,
-    institution       text not null check (institution in ('BQK','ATK','ASK','ECB')),
+    -- KBA is the banking association. Unlike the other four it publishes no
+    -- file this project downloads; its figures arrive as an aggregate extract,
+    -- which is why source_versions below tolerates a null hash.
+    institution       text not null check (institution in ('BQK','ATK','ASK','ECB','KBA')),
     dataset_name      text not null,
     official_title    text,
     source_url        text not null,
     source_language   text,
-    frequency         text not null check (frequency in ('monthly','quarterly','annual')),
+    frequency         text not null check (frequency in ('monthly','quarterly','annual','periodic')),
     methodology_notes text,
     is_active         boolean not null default true
 );
@@ -294,6 +297,29 @@ create table if not exists core.dim_metric_definition (
 -- ============================================================================
 -- CORE — facts, stock and flow kept apart
 -- ============================================================================
+
+-- Bank-level POS, from the KBA extract.
+--
+-- It breaks two habits the rest of the schema keeps, and both are deliberate.
+-- There is no date_id: the extract carries no period label, and inventing one
+-- to satisfy a foreign key would be the exact failure this project refuses.
+-- And stock and flow do share this row, because the source publishes them as
+-- one column set for one unlabelled span; splitting them would imply the two
+-- were observed separately, which is not known. Nothing here is ever summed
+-- across periods, because there is only one.
+create table if not exists core.fact_bank_pos (
+    bank_code         text not null,
+    definition_id     integer not null references core.dim_metric_definition(definition_id),
+    source_version_id bigint  not null references audit.source_versions(source_version_id),
+    transaction_count numeric,
+    transaction_value numeric,
+    pos_terminals     numeric,
+    -- counted per acquiring bank, so this is acquiring relationships and the
+    -- column name says which
+    merchant_relations numeric,
+    reports           boolean not null default true,
+    primary key (bank_code, definition_id)
+);
 
 create table if not exists core.fact_pos_terminal_stock (
     date_id            integer not null references core.dim_date(date_id),

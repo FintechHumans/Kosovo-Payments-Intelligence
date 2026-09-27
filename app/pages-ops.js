@@ -811,8 +811,175 @@
       U.esc(d) + '</p></div></div>';
   }
 
+  // =====================================================================
+  // FAIR SHARE — where each bank sits, and why
+  //
+  // The whole page lives inside one extract. Every ratio has a KBA numerator
+  // and a KBA denominator, because the extract is a fourth POS universe that
+  // matches none of the BQK series and carries no period label. Nothing here
+  // is placed on a time axis and nothing is divided against a BQK figure.
+  // =====================================================================
+  function renderFairShare(host) {
+    const bp = DA.getBankPosition();
+    if (!bp) {
+      host.innerHTML = U.emptyState(
+        'Not available',
+        'No bank-level extract is loaded. Bank shares cannot be derived from any ' +
+        'BQK, ATK or ASK publication.');
+      return;
+    }
+    const m = bp.market, me = bp.banks.filter(function (b) {
+      return b.code === bp.focus; })[0];
+    const fmtX = function (v) { return v.toFixed(2) + '×'; };
+    // Two banks hold about two hundredths of a percent of the value. Rounded to
+    // one decimal that prints as 0.0%, which reads as none at all — and a share
+    // that is very small is not a share that is absent.
+    const share = function (v) {
+      return v > 0 && v < 0.001 ? U.pct(v, 2) : U.pct(v, 1);
+    };
+
+    let h = '<header class="page-head"><h1>Fair share</h1>' +
+      '<p class="q">Who holds the terminals, who carries the value, and why the two ' +
+      'are not the same banks.</p></header>';
+
+    if (me) {
+      const behind = me.fair_share_index < 1;
+      h += headline(
+        'KBA bank reporting · period not stated',
+        bp.focus + ' holds ' + U.pct(me.share_pos, 1) + ' of terminals and ' +
+          U.pct(me.share_value, 1) + ' of the value',
+        'The Fair Share Index is share of value over share of terminals. At <strong>' +
+        me.fair_share_index.toFixed(2) + '×</strong>, each ' + bp.focus + ' terminal ' +
+        (behind ? 'carries less' : 'carries more') + ' than the market average. That ' +
+        'figure factors exactly into how often a terminal is used and how large each ' +
+        'payment is, and only one of the two is short.',
+        fig(me.fair_share_index.toFixed(2) + '×', 'fair share index', true) +
+        fig(U.pct(me.index_frequency, 0), 'payments per terminal vs market') +
+        fig(U.pct(me.index_ticket, 0), 'average payment vs market') +
+        fig('#' + me_rank(bp, 'share_value') + ' of ' + bp.banks.length, 'by value'),
+        '<span>Kosovo Banking Association, supplied extract</span><span>·</span>' +
+        '<span>No period label — see the note below</span>');
+
+      h += sec('Why the gap is where it is',
+               'The index is the product of these two, exactly') +
+        '<div class="grid2">' +
+        concl('Terminals are used ' + U.pct(me.index_frequency, 0) + ' as often',
+              bp.focus + ' runs ' + U.exact(Math.round(me.tx_per_terminal)) +
+              ' payments per terminal against ' + U.exact(Math.round(m.tx_per_terminal)) +
+              ' across the reporting banks. This is the whole of the gap.') +
+        concl('Each payment is ' + U.pct(me.index_ticket, 0) + ' of the market',
+              'The average ' + bp.focus + ' payment is €' + me.avg_ticket.toFixed(2) +
+              ' against €' + m.avg_ticket.toFixed(2) + ' for the market. Ticket size is ' +
+              'not the problem; how often the fleet is used is.') +
+        '</div></section>';
+
+      if (bp.gap) {
+        const g = bp.gap;
+        h += sec('What closing it would be worth',
+                 'Arithmetic on the extract, not a forecast') +
+          '<div class="card"><div class="card-b" style="padding-top:20px">' +
+          '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:62ch">' +
+          'If ' + bp.focus + ' terminals were used as often as the market average, and ' +
+          'every payment stayed exactly the size it is today, the fleet would carry ' +
+          '<strong>' + U.exact(Math.round(g.transaction_shortfall)) + '</strong> more ' +
+          'payments — <strong>' + U.money(g.value_shortfall) + '</strong> of additional ' +
+          'value over the same span. Standing at fair share of value would be worth ' +
+          U.money(g.fair_share_shortfall) + '.</p>' +
+          '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:62ch;' +
+          'margin-top:12px">What that is worth as revenue cannot be computed here. ' +
+          'Merchant charges and interchange are published by no one.</p>' +
+          '</div></div></section>';
+      }
+    }
+
+    h += sec('Every reporting bank', 'Share of terminals against share of value') +
+      '<div class="card"><div class="card-b" id="fs-dumbbell"></div></div>' +
+      '<div class="card" style="margin-top:12px"><div class="card-b" id="fs-index"></div></div>' +
+      '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+      '<th>Bank</th><th class="n">Terminals</th><th class="n">Share of terminals</th>' +
+      '<th class="n">Share of value</th><th class="n">Fair share</th>' +
+      '<th class="n">Payments per terminal</th><th class="n">Average payment</th>' +
+      '</tr></thead><tbody>' +
+      bp.banks.map(function (b) {
+        const mine = b.code === bp.focus;
+        return '<tr' + (mine ? ' style="background:var(--surface-sunk)"' : '') + '>' +
+          '<td class="strong">' + U.esc(b.code) + '</td>' +
+          '<td class="n">' + U.exact(b.pos_terminals) + '</td>' +
+          '<td class="n">' + share(b.share_pos) + '</td>' +
+          '<td class="n">' + share(b.share_value) + '</td>' +
+          '<td class="n" style="font-weight:600;color:' +
+            (b.fair_share_index < 1 ? 'var(--neg)' : 'var(--pos)') + '">' +
+            b.fair_share_index.toFixed(2) + '×</td>' +
+          '<td class="n">' + U.exact(Math.round(b.tx_per_terminal)) + '</td>' +
+          '<td class="n">€' + b.avg_ticket.toFixed(2) + '</td></tr>';
+      }).join('') +
+      '<tr><td class="strong">All reporting</td>' +
+      '<td class="n">' + U.exact(m.pos_terminals) + '</td>' +
+      '<td class="n">100.0%</td><td class="n">100.0%</td>' +
+      '<td class="n" style="font-weight:600">1.00×</td>' +
+      '<td class="n">' + U.exact(Math.round(m.tx_per_terminal)) + '</td>' +
+      '<td class="n">€' + m.avg_ticket.toFixed(2) + '</td></tr>' +
+      '</tbody></table></div></div>' +
+      disclosure('What this extract is, and what it is not',
+        '<p><strong>Supplied, not downloaded.</strong> Every other figure in this report ' +
+        'comes from a file that was fetched and hashed. This one was supplied as bank ' +
+        'totals, so there is no source file, no SHA-256 and no download date. It is the ' +
+        'one input here that cannot be re-derived from a publication.</p>' +
+        '<p><strong>It reconciles.</strong> The bank columns sum to the published ' +
+        '“ALL Banks” column exactly on all four rows — transactions, value, terminals ' +
+        'and merchants. The loader refuses the file otherwise.</p>' +
+        '<p><strong>No period.</strong> ' + U.esc(bp.source.period_note) + '</p>' +
+        '<p><strong>A fourth universe.</strong> ' + U.esc(bp.universe.note) + ' The ' +
+        'payments-per-terminal figures on this page are therefore not comparable with ' +
+        'the BQK per-terminal figures elsewhere in this report.</p>' +
+        '<p><strong>Merchants are double counted.</strong> ' +
+        U.esc(bp.notes.merchants) + '</p>' +
+        '<p><strong>Two banks are silent.</strong> ' + U.esc(bp.notes.blank_banks) +
+        '</p>') +
+      '</section>';
+
+    host.innerHTML = h;
+
+    const dumb = bp.banks.map(function (b) {
+      return { label: b.code, a: b.share_pos * 100, b: b.share_value * 100,
+        tip: function () {
+          return { name: b.code, value: U.pct(b.share_value, 1) + ' of value',
+            delta: U.pct(b.share_pos, 1) + ' of terminals' }; } };
+    });
+    $('#fs-dumbbell', host).appendChild(C.dumbbell(dumb, {
+      w: 660, fmt: function (v) { return v.toFixed(1) + '%'; },
+      aLabel: 'Terminals', bLabel: 'Value' }));
+    $('#fs-dumbbell', host).insertAdjacentHTML('beforeend',
+      '<div class="sum-legend"><span><i style="background:var(--rule-strong)"></i>' +
+      'Open dot: share of terminals</span><span><i style="background:' + C.colors.purple +
+      '"></i>Filled dot: share of value</span></div>');
+
+    $('#fs-index', host).appendChild(C.hbars(
+      bp.banks.slice().sort(function (x, y) {
+        return y.fair_share_index - x.fair_share_index; }).map(function (b) {
+        return { label: b.code + (b.code === bp.focus ? ' ←' : ''),
+          value: b.fair_share_index,
+          color: b.fair_share_index < 1 ? C.colors.neg : C.colors.pos,
+          tip: function () {
+            return { name: b.code, value: b.fair_share_index.toFixed(2) + '× fair share',
+              delta: U.pct(b.index_frequency, 0) + ' usage × ' +
+                     U.pct(b.index_ticket, 0) + ' ticket' }; } };
+      }), { w: 660, rowH: 30, fmt: fmtX, pad: { t: 6, r: 74, b: 6, l: 120 } }));
+    $('#fs-index', host).insertAdjacentHTML('beforeend',
+      '<div class="sum-legend"><span>Share of value ÷ share of terminals. ' +
+      '1.00× is the market average.</span></div>');
+
+    U.observeReveals(host);
+  }
+
+  function me_rank(bp, key) {
+    return bp.banks.slice().sort(function (x, y) { return y[key] - x[key]; })
+      .map(function (b) { return b.code; }).indexOf(bp.focus) + 1;
+  }
+
   global.OpsPages = { renderPool: renderPool, renderMix: renderMix,
                       renderPosition: renderPosition, renderCoverage: renderCoverage,
                       renderPenetration: renderPenetration,
-                      renderConclusion: renderConclusion };
+                      renderConclusion: renderConclusion,
+                      renderFairShare: renderFairShare };
 })(window);

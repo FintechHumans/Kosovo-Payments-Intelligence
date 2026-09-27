@@ -1,0 +1,66 @@
+{
+  "_comment": [
+    "Bank-level POS reporting collected by the Kosovo Banking Association.",
+    "",
+    "PROVENANCE. Unlike every other input in this project, this one was not",
+    "downloaded from a publisher and hashed. It was supplied by the project owner",
+    "as an aggregate extract. There is no source file, no SHA-256 and no download",
+    "date to cite, and the report says so rather than implying an official",
+    "download. Only bank totals appear here: no merchant, terminal or",
+    "transaction record.",
+    "",
+    "AMOUNT UNIT. The extract prints amounts without a unit. Thousands of euro is",
+    "the only reading that survives arithmetic: it puts the average payment at",
+    "EUR 23.98, against EUR 22.86 to EUR 28.12 across the three BQK series over",
+    "comparable spans. Euro units would give EUR 0.02 a payment, millions would",
+    "give EUR 23,978.",
+    "",
+    "PERIOD. The extract carries no period label, and none is invented."
+  ],
+
+  "source": {
+    "institution": "KBA",
+    "publication": "Kosovo Banking Association — bank reporting, POS transactions",
+    "supplied_by": "Project owner, as an aggregate extract",
+    "hashable": false,
+    "period": null,
+    "period_status": "UNCONFIRMED",
+    "period_note": "No period label in the extract. The terminal count sits between the BQK monthly stock for March 2026 (31,187) and April 2026 (32,121), and the transaction count is within 0.2% of BQK Table 15 domestic for the twelve months to March 2026. The value for that same window is 6% lower. No single BQK window fits all four rows, so no period is asserted.",
+    "amount_unit": "EUR thousand",
+    "amount_multiplier": 1000
+  },
+
+  "universe": {
+    "definition_id": "pos_kba_bank",
+    "name": "POS Transactions — KBA bank reporting",
+    "perspective": "Acquiring, reported by the acquiring bank",
+    "note": "A fourth POS universe. It matches none of the three BQK series, so it is never mixed with them: every figure derived from it has a KBA numerator and a KBA denominator."
+  },
+
+  "banks": [
+    { "code": "RBKO", "tx_count": 9175477,  "tx_value_thousand_eur": 213361, "pos_terminals": 8424, "merchants": 3979 },
+    { "code": "NLB",  "tx_count": 5024552,  "tx_value_thousand_eur": 122123, "pos_terminals": 4726, "merchants": 2447 },
+    { "code": "BKT",  "tx_count": 4015201,  "tx_value_thousand_eur":  91057, "pos_terminals": 2390, "merchants": 1309 },
+    { "code": "PCB",  "tx_count": 11842633, "tx_value_thousand_eur": 266573, "pos_terminals": 6028, "merchants": 3215 },
+    { "code": "TEB",  "tx_count": 13357282, "tx_value_thousand_eur": 360465, "pos_terminals": 7497, "merchants": 3150 },
+    { "code": "BEK",  "tx_count": 3064817,  "tx_value_thousand_eur":  60781, "pos_terminals": 2323, "merchants":  993 },
+    { "code": "BPB",  "tx_count": null,     "tx_value_thousand_eur":   null, "pos_terminals": null, "merchants": null },
+    { "code": "PRB",  "tx_count": null,     "tx_value_thousand_eur":   null, "pos_terminals": null, "merchants": null },
+    { "code": "ZRB",  "tx_count": 9794,     "tx_value_thousand_eur":    262, "pos_terminals":  294, "merchants":  125 },
+    { "code": "CRB",  "tx_count": 9121,     "tx_value_thousand_eur":    257, "pos_terminals":  141, "merchants":  130 }
+  ],
+
+  "published_total": {
+    "label": "ALL Banks",
+    "tx_count": 46498877,
+    "tx_value_thousand_eur": 1114879,
+    "pos_terminals": 31823,
+    "merchants": 15348
+  },
+
+  "notes": {
+    "blank_banks": "BPB and PRB report no figure. That is absent, not zero, and they are excluded from every ratio rather than entered as nil.",
+    "merchants": "Merchant counts are per acquiring bank, so a merchant accepting through two banks is counted by each. The 15,348 total is acquiring relationships, not distinct merchants — it exceeds the highest unduplicated BQK monthly merchant count of 14,049. Terminals do not have this problem: a terminal has one acquirer.",
+    "codes": "Bank codes are reproduced exactly as the extract prints them. No expansion to full legal names is attempted."
+  }
+}

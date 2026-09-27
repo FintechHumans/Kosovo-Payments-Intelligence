@@ -162,6 +162,49 @@ KPI_REGISTRY = [
          source_requirements="ATK Qarkullimi + sector mapping v1",
          known_limitations="Reported as floor and ceiling because wholesale and retail "
                            "are published as one section."),
+
+    dict(kpi_id="bank_pos_share",
+         display_name="POS share by bank",
+         business_definition="Each acquiring bank's share of POS terminals, transactions "
+                             "and value within the KBA reporting universe.",
+         sql_formula="fact_bank_pos.<measure> / sum(fact_bank_pos.<measure>)",
+         numerator="bank measure", denominator="KBA reporting total",
+         required_definition="pos_kba_bank", frequency="periodic",
+         aggregation_rule="Share within a single unlabelled period; never summed or trended",
+         valid_comparison_method="Between banks in the same extract only",
+         source_requirements="KBA bank reporting, supplied as an aggregate extract",
+         known_limitations="Supplied rather than downloaded, so there is no file hash. "
+                           "The extract carries no period label. Two banks report nothing "
+                           "and are excluded rather than counted as zero."),
+
+    dict(kpi_id="fair_share_index",
+         display_name="Fair Share Index",
+         business_definition="A bank's share of POS value divided by its share of POS "
+                             "terminals. Above 1 means each terminal carries more value "
+                             "than the market average, below 1 means less.",
+         sql_formula="(value / total_value) / (terminals / total_terminals)",
+         numerator="share of value", denominator="share of terminals",
+         required_definition="pos_kba_bank", frequency="periodic",
+         aggregation_rule="Ratio of two shares within one extract",
+         valid_comparison_method="Between banks in the same extract only",
+         source_requirements="KBA bank reporting",
+         known_limitations="Identical to value per terminal indexed to the market, and "
+                           "factors exactly into transactions per terminal times average "
+                           "payment. Both factors are reported so the reason for a gap is "
+                           "visible. Says nothing about revenue: pricing is not published."),
+
+    dict(kpi_id="bank_pos_productivity",
+         display_name="Transactions per terminal by bank",
+         business_definition="Card payments per POS terminal, for each acquiring bank.",
+         sql_formula="fact_bank_pos.transaction_count / fact_bank_pos.pos_terminals",
+         numerator="transaction_count", denominator="pos_terminals",
+         required_definition="pos_kba_bank", frequency="periodic",
+         aggregation_rule="Ratio within one bank and one extract",
+         valid_comparison_method="Between banks in the same extract only",
+         source_requirements="KBA bank reporting",
+         known_limitations="Not comparable with the BQK per-terminal figures elsewhere in "
+                           "this report: those count a different transaction universe over "
+                           "a known period, this one an unlabelled span."),
 ]
 
 
@@ -241,5 +284,31 @@ def derive_kpi_status(ctx):
     add("transaction_value_bands", "BLOCKED",
         "BQK does not publish card transactions by value band in any reviewed source.",
         required="Published value-band table")
+
+    # ---- the KBA bank layer, present only when the extract was loaded
+    kba = ctx.get('kba')
+    if kba:
+        recon = 'reconciles exactly to its own published total' if kba.get('reconciles') \
+                else 'DOES NOT reconcile to its own published total'
+        silent = kba.get('silent') or []
+        add("bank_pos_share", "WARNING",
+            "The extract %s, so the shares are internally sound. It is marked WARNING "
+            "for provenance rather than arithmetic: it was supplied as an aggregate "
+            "rather than downloaded, so it carries no file hash%s."
+            % (recon,
+               ', and %s report nothing and are excluded' % ' and '.join(silent)
+               if silent else ''),
+            required="A hashable KBA publication with a stated period")
+        add("fair_share_index", "WARNING",
+            "Numerator and denominator both come from the KBA extract, so the index is "
+            "internally consistent. It inherits the extract's missing period label, and "
+            "it measures value per terminal, not revenue — no public source prices a "
+            "transaction.",
+            required="A stated reporting period; merchant pricing for any revenue read")
+        add("bank_pos_productivity", "WARNING",
+            "Valid within the extract. It must not be read against the BQK per-terminal "
+            "figures elsewhere in this report, which count a different universe over a "
+            "known period.",
+            required="A stated reporting period")
 
     return S

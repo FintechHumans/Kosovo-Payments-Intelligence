@@ -409,3 +409,111 @@ def emerging_channels(channel_mix):
     if pos:
         out['_pos_scale'] = {'latest': pos[-1][1], 'latest_period': pos[-1][0]}
     return out or None
+
+
+# The focus bank for the narrative sentence. Every bank is reported on the same
+# footing; this only decides which one the prose is written about.
+FOCUS_BANK = 'NLB'
+
+
+def bank_position(kba, focus=FOCUS_BANK):
+    """Where each bank sits in the POS market, from the KBA extract alone.
+
+    Every ratio here has a KBA numerator and a KBA denominator. The extract is
+    a fourth POS universe that matches none of the three BQK series, so nothing
+    is divided across the two.
+
+    The Fair Share Index is share of value over share of terminals. It is
+    identically the bank's value per terminal measured against the market's,
+    and that quantity factors exactly:
+
+        value per terminal = transactions per terminal x average payment
+
+    so a bank below fair share is below it for one of two reasons that can be
+    told apart: its terminals are used less often, or each payment is smaller.
+    Both factors are reported beside the index so the reason is visible rather
+    than guessed at.
+    """
+    if not kba:
+        return None
+    t = kba['total']
+    TX, VAL, POS, MER = (t['tx_count'], t['tx_value'],
+                         t['pos_terminals'], t['merchants'])
+    if not (TX and VAL and POS and MER):
+        return None
+
+    mkt = {'tx_count': TX, 'tx_value': VAL, 'pos_terminals': POS,
+           'merchant_relationships': MER,
+           'tx_per_terminal': TX / POS, 'value_per_terminal': VAL / POS,
+           'avg_ticket': VAL / TX, 'value_per_merchant': VAL / MER,
+           'terminals_per_merchant': POS / MER}
+
+    rows = []
+    for b in kba['banks']:
+        tx, val = b['tx_count'], b['tx_value']
+        pos, mer = b['pos_terminals'], b['merchants']
+        if not (tx and val and pos):
+            continue
+        rows.append({
+            'code': b['code'],
+            'tx_count': tx, 'tx_value': val,
+            'pos_terminals': pos, 'merchants': mer,
+            'share_tx': tx / TX, 'share_value': val / VAL,
+            'share_pos': pos / POS,
+            'share_merchants': (mer / MER) if mer else None,
+            'fair_share_index': (val / VAL) / (pos / POS),
+            'tx_per_terminal': tx / pos,
+            'value_per_terminal': val / pos,
+            'avg_ticket': val / tx,
+            'value_per_merchant': (val / mer) if mer else None,
+            'terminals_per_merchant': (pos / mer) if mer else None,
+            # the two factors the index breaks into
+            'index_frequency': (tx / pos) / mkt['tx_per_terminal'],
+            'index_ticket': (val / tx) / mkt['avg_ticket'],
+        })
+    if not rows:
+        return None
+    rows.sort(key=lambda r: r['share_value'], reverse=True)
+
+    # The identity above is what makes the decomposition honest, so it is
+    # checked here rather than asserted in a comment.
+    for r in rows:
+        assert abs(r['index_frequency'] * r['index_ticket']
+                   - r['fair_share_index']) < 1e-9, r['code']
+
+    me = next((r for r in rows if r['code'] == focus), None)
+    gap = None
+    if me:
+        at_market_tx = me['pos_terminals'] * mkt['tx_per_terminal']
+        gap = {
+            'code': focus,
+            'rank_by_value': [r['code'] for r in rows].index(focus) + 1,
+            'rank_by_terminals': sorted(
+                rows, key=lambda r: r['share_pos'], reverse=True).index(me) + 1,
+            'of': len(rows),
+            # what closing the frequency gap alone would be worth, holding the
+            # bank's own average payment exactly where it is
+            'transactions_at_market_rate': at_market_tx,
+            'transaction_shortfall': at_market_tx - me['tx_count'],
+            'value_at_market_rate': at_market_tx * me['avg_ticket'],
+            'value_shortfall': at_market_tx * me['avg_ticket'] - me['tx_value'],
+            # what standing at fair share of value would be worth
+            'fair_share_value': me['share_pos'] * VAL,
+            'fair_share_shortfall': me['share_pos'] * VAL - me['tx_value'],
+        }
+
+    return {
+        'source': kba['source'],
+        'universe': kba['universe'],
+        'notes': kba['notes'],
+        'silent': kba['silent'],
+        'checks': kba['checks'],
+        'reconciles': all(c['difference'] == 0 for c in kba['checks']),
+        'market': mkt,
+        'banks': rows,
+        'focus': focus,
+        'gap': gap,
+        'note': 'Shares are of the banks that report. %s report no figure and '
+                'are excluded rather than entered as zero.'
+                % (', '.join(kba['silent']) or 'No banks'),
+    }

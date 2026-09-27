@@ -36,6 +36,7 @@ import openpyxl
 
 import mappings as M
 import parse_ask
+import parse_kba
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -43,6 +44,9 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_ATK = os.path.join(BASE, 'data', 'raw', 'atk')
 RAW_BQK = os.path.join(BASE, 'data', 'raw', 'bqk')
 RAW_ASK = os.path.join(BASE, 'data', 'raw', 'ask')
+# Not data/raw: nothing here was downloaded. The KBA extract was supplied as
+# bank totals, so it is committed with the project and carries no file hash.
+SUPPLIED = os.path.join(BASE, 'data', 'supplied')
 CURATED = os.path.join(BASE, 'data', 'curated')
 # The BQK monthly and Table 15 series are ingested through the validated parser
 # in the companion BQK repository, which reproduces the published workbooks
@@ -177,6 +181,19 @@ def register_sources(atk_years):
              'Euro-area reference for the same half-year. Figures are quoted from '
              'the ECB release as published, never recomputed.',
              source_table=LV.EURO_AREA['period'], language='en')
+    # The one source with no file behind it. register() hashes a path when it
+    # gets one; here there is none, so sha256 and file_size stay null and the
+    # UI reads that as "supplied" rather than printing a hash that never was.
+    if os.path.exists(os.path.join(SUPPLIED, 'kba_pos_by_bank.json')):
+        register('KBA_POS_BY_BANK', 'KBA', 'Bank reporting — POS transactions',
+                 'Shoqata e Bankave të Kosovës — raportimi i bankave për POS',
+                 'https://www.bankassoc-kos.com/', 'periodic',
+                 'Bank-level POS totals supplied by the project owner as an '
+                 'aggregate extract, not downloaded from a publication. It has no '
+                 'source file to hash and no period label. It is a fourth POS '
+                 'universe: shares and productivity are computed inside it and '
+                 'never divided against a BQK total.',
+                 source_table='POS TRANSACTIONS')
     for y in atk_years:
         register('ATK_QARKULLIMI_%d' % y, 'ATK', 'Open Data — Qarkullimi %d' % y,
                  'Të dhëna të hapura — Qarkullimi %d' % y,
@@ -980,6 +997,7 @@ def main():
     cmix = channel_mix_payload()
     cards_p = cards_payload()
     pos_default = pos_monthly('pos_rm_allcards')
+    kba = parse_kba.load(SUPPLIED)
 
     lever = {
         'penetration': LV.penetration(sec_year, pos_monthly('pos_t15_allcards'), retail),
@@ -990,7 +1008,64 @@ def main():
         'benchmarks': LV.benchmarks(pos_default, cards_p),
         'headroom': LV.acceptance_headroom(geo, ents),
         'emerging': LV.emerging_channels(cmix),
+        'bank_position': LV.bank_position(kba),
     }
+
+    # ---- what the KBA extract is, and what it is not
+    if kba:
+        for c in kba['checks']:
+            check('kba_reconcile_' + c['field'], 'reconciliation', 'error',
+                  c['difference'] == 0,
+                  'KBA %s: the bank columns sum to %s against a published total '
+                  'of %s.' % (c['field'], format(c['sum_of_banks'], ','),
+                              format(c['published'], ',')),
+                  table='core.fact_bank_pos',
+                  expected=format(c['published'], ','),
+                  actual=format(c['sum_of_banks'], ','))
+
+        check('kba_provenance', 'ingest', 'warning', False,
+              'The KBA bank-level extract was supplied as aggregate totals, not '
+              'downloaded. It carries no source file, no SHA-256 and no download '
+              'date, so it is the one input that cannot be re-derived from a '
+              'publication. Every figure built on it says so.',
+              table='core.fact_bank_pos',
+              expected='hashed publication', actual='supplied aggregate')
+
+        check('kba_period', 'coverage', 'warning', False,
+              'The KBA extract carries no period label. Its terminal count falls '
+              'between the BQK monthly stock for March and April 2026, and its '
+              'transaction count is within 0.2%% of BQK Table 15 domestic for the '
+              'twelve months to March 2026, but the value for that window is 6%% '
+              'lower. No single BQK window fits all four rows, so no period is '
+              'asserted and no KBA figure is placed on a time axis.',
+              table='core.fact_bank_pos',
+              expected='labelled period', actual='unlabelled')
+
+        check('kba_universe', 'model', 'warning', False,
+              'KBA bank reporting is a fourth POS universe alongside the three '
+              'BQK series. Shares and productivity are computed inside it — a '
+              'KBA numerator over a KBA denominator — and never divided against '
+              'a BQK total.', table='core.dim_metric_definition',
+              expected='one universe', actual='four universes')
+
+        check('kba_merchants_duplicated', 'model', 'warning', False,
+              'Merchants are counted by each acquiring bank, so the %s total is '
+              'acquiring relationships rather than distinct merchants: it exceeds '
+              'the highest unduplicated BQK monthly merchant count. Terminals do '
+              'not have this problem, so terminal-based measures carry the '
+              'analysis and merchant-based ones are labelled.'
+              % format(kba['total']['merchants'], ','),
+              table='core.fact_bank_pos',
+              expected='distinct merchants', actual='acquiring relationships')
+
+        if kba['silent']:
+            check('kba_silent_banks', 'coverage', 'warning', False,
+                  '%s report no POS figure in the extract. That is absent, not '
+                  'zero: they are excluded from every share and every average '
+                  'rather than entered as nil.' % ' and '.join(kba['silent']),
+                  table='core.fact_bank_pos',
+                  expected='%d banks' % len(kba['banks'] + kba['silent']),
+                  actual='%d reporting' % len(kba['banks']))
 
     for name, ok, msg in [
         ('ask_retail', retail is not None,
@@ -1032,7 +1107,8 @@ def main():
         signal_months=sig['months'] if sig else 0,
         grain_approximation=True,
         geo_pairing_verified=len(M.BQK_GEO_PAIRING_VERIFIED),
-        geo_cities=len(M.BQK_GEO_2024)))
+        geo_cities=len(M.BQK_GEO_2024),
+        kba=lever['bank_position']))
     T['source_reconciliation'] = RECON
 
     payload = dict(

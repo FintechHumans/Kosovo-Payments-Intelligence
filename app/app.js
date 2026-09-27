@@ -39,17 +39,20 @@
     { id: 'position', n: '06', nav: 'Position',           title: 'Position',
       q: 'Where does Kosovo sit against the euro area?',
       group: 'primary', filters: [] },
-    { id: 'conclusion', n: '07', nav: 'What this means', title: 'What this means',
+    { id: 'fairshare', n: '07', nav: 'Fair share',        title: 'Fair share',
+      q: 'Who holds the terminals, and who carries the value?',
+      group: 'primary', filters: [] },
+    { id: 'conclusion', n: '08', nav: 'What this means', title: 'What this means',
       q: 'The evidence, in order, and what it adds up to.',
       group: 'primary', filters: [] },
-    { id: 'network',  n: '08', nav: 'POS network',        title: 'The POS network',
+    { id: 'network',  n: '09', nav: 'POS network',        title: 'The POS network',
       q: 'How large is the network, how hard does it work, and where is it?',
       group: 'secondary', filters: ['period', 'universe'] },
-    { id: 'payments', n: '09', nav: 'Payment behaviour',  title: 'Payment behaviour',
+    { id: 'payments', n: '10', nav: 'Payment behaviour',  title: 'Payment behaviour',
       q: 'How are people paying?', group: 'secondary', filters: ['period'] },
-    { id: 'quality',  n: '10', nav: 'Data quality',       title: 'Data quality',
+    { id: 'quality',  n: '11', nav: 'Data quality',       title: 'Data quality',
       q: 'Can I trust these numbers?', group: 'secondary', filters: [] },
-    { id: 'method',   n: '11', nav: 'Methodology',        title: 'Methodology',
+    { id: 'method',   n: '12', nav: 'Methodology',        title: 'Methodology',
       q: 'How exactly was this calculated?', group: 'secondary', filters: [] }
   ];
   const PAGE = {};
@@ -812,11 +815,14 @@
     h += section('What this cannot answer', '') +
       '<div class="card"><div class="card-b" style="padding-top:20px">' +
       '<p style="font-size:13.5px;color:var(--ink-2);max-width:88ch;line-height:1.65">' +
-      'No public source splits POS terminals, cards, merchants or transactions by bank, so ' +
-      'bank-level market share, a fair-share index, transaction leakage and on-us versus ' +
-      'off-us activity are out of reach here — absent by necessity, not by choice. ' +
-      'Merchant-level performance, merchant service charges, interchange, scheme fees and ' +
-      'terminal economics appear in no public source at all.</p>' +
+      'No BQK, ATK or ASK publication splits POS terminals, cards, merchants or ' +
+      'transactions by bank. The bank layer on the Fair share page comes from a KBA ' +
+      'extract supplied to this project rather than downloaded, which is why it carries ' +
+      'no file hash and no period label, and why nothing built on it is divided against ' +
+      'a BQK total. Transaction leakage and on-us versus off-us activity stay out of ' +
+      'reach: no source separates them. Merchant service charges, interchange, scheme ' +
+      'fees and terminal economics appear in no public source at all, so nothing here ' +
+      'prices a transaction.</p>' +
       '<p style="font-size:13.5px;color:var(--ink-2);max-width:88ch;line-height:1.65;' +
       'margin-top:14px">The data model reserves those tables against the same date, ' +
       'geography, sector and channel dimensions, so they can be added later without ' +
@@ -843,6 +849,7 @@
     mix: function () { OPS.renderMix($('#page-mix'), state); },
     coverage: function () { OPS.renderCoverage($('#page-coverage'), state); },
     position: function () { OPS.renderPosition($('#page-position'), state); },
+    fairshare: function () { OPS.renderFairShare($('#page-fairshare'), state); },
     network: renderNetwork,
     payments: renderPayments,
     quality: renderQuality,
