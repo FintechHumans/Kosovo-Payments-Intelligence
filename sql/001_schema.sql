@@ -43,10 +43,13 @@ create schema if not exists audit;
 
 create table if not exists audit.data_sources (
     source_id         text primary key,
-    -- KBA is the banking association. Unlike the other four it publishes no
-    -- file this project downloads; its figures arrive as an aggregate extract,
+    -- KBA is the banking association. Unlike the others it publishes no file
+    -- this project downloads; its figures arrive as an aggregate extract,
     -- which is why source_versions below tolerates a null hash.
-    institution       text not null check (institution in ('BQK','ATK','ASK','ECB','KBA')),
+    -- DOGANA is Kosovo Customs, which publishes import and export files under
+    -- its own "Open Data" heading at ten-digit tariff-code detail.
+    institution       text not null
+                      check (institution in ('BQK','ATK','ASK','ECB','KBA','DOGANA')),
     dataset_name      text not null,
     official_title    text,
     source_url        text not null,
@@ -201,6 +204,31 @@ create table if not exists raw.atk_turnover (
 
 create index if not exists ix_raw_atk on raw.atk_turnover (year, month);
 
+-- Customs import and export lines, kept at the grain the publisher uses: one
+-- row per month, country of origin and ten-digit tariff code. Dogana files
+-- these under its own "Open Data" heading, unlike ARBK, whose portal forbids
+-- automated collection of its pages.
+create table if not exists raw.dogana_trade (
+    raw_id            bigserial primary key,
+    source_version_id bigint not null references audit.source_versions(source_version_id),
+    run_id            bigint references audit.etl_runs(run_id),
+    direction         text not null check (direction in ('IMPORT','EXPORT')),
+    year              integer not null,
+    month             integer not null check (month between 1 and 12),
+    regime_raw        text,
+    origin_raw        text,
+    tariff_code_raw   text not null,
+    quantity_raw      numeric,
+    value_raw         numeric,
+    net_weight_raw    numeric,
+    customs_duty_raw  numeric,
+    excise_raw        numeric,
+    vat_raw           numeric,
+    loaded_at         timestamptz not null default now()
+);
+
+create index if not exists ix_raw_dogana on raw.dogana_trade (direction, year, month);
+
 -- ============================================================================
 -- CORE — dimensions
 -- ============================================================================
@@ -285,7 +313,10 @@ create table if not exists core.dim_metric_definition (
     cards_coverage      text,
     transaction_type    text,
     count_or_value      text check (count_or_value in ('count','value','both','stock')),
-    stock_or_flow       text check (stock_or_flow in ('stock','flow')),
+    -- 'both' exists for the KBA extract, which publishes terminals beside
+    -- transactions over one unlabelled span. Splitting them would imply the
+    -- two were observed separately, which is not known.
+    stock_or_flow       text check (stock_or_flow in ('stock','flow','both')),
     geographic_coverage text,
     frequency           text,
     unit                text,
