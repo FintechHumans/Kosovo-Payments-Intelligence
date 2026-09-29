@@ -68,15 +68,22 @@ select w.year_month, w.year, w.month, w.definition_id,
             then w.transaction_value / w.terminal_avg_12m end  as value_per_average_pos,
        case when w.transaction_count > 0
             then w.transaction_value / w.transaction_count end as average_ticket,
-       case when lag(w.terminal_count, 12) over sw > 0
-            then w.terminal_count / lag(w.terminal_count, 12) over sw - 1 end     as pos_yoy,
-       case when lag(w.transaction_count, 12) over sw > 0
-            then w.transaction_count / lag(w.transaction_count, 12) over sw - 1 end as tx_yoy,
-       case when lag(w.transaction_value, 12) over sw > 0
-            then w.transaction_value / lag(w.transaction_value, 12) over sw - 1 end as value_yoy
+       -- Year on year is matched on the CALENDAR month, not on a row offset.
+       -- lag(x, 12) counts twelve rows back, which is only twelve months back
+       -- while the series has no gaps: a single missing month silently shifts
+       -- every comparison after it onto the wrong month. The rest of this
+       -- project matches like for like explicitly, and so does this.
+       case when p.terminal_count > 0
+            then w.terminal_count / p.terminal_count - 1 end       as pos_yoy,
+       case when p.transaction_count > 0
+            then w.transaction_count / p.transaction_count - 1 end as tx_yoy,
+       case when p.transaction_value > 0
+            then w.transaction_value / p.transaction_value - 1 end as value_yoy
 from withavg w
 join core.dim_metric_definition md on md.definition_id = w.definition_id
-window sw as (partition by w.definition_id order by w.date_id);
+left join withavg p on p.definition_id = w.definition_id
+                   and p.year  = w.year - 1
+                   and p.month = w.month;
 
 -- ----------------------------------------------------------------------------
 -- Market signals. Compares the complete months of the latest year against the
