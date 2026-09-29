@@ -221,6 +221,60 @@ def _total_row(labels):
     return None
 
 
+def household_consumption(raw_dir):
+    """Household final consumption expenditure, annual, at current prices.
+
+    The card-intensity ratio elsewhere in this project divides card value by
+    ALL declared business turnover, which includes wholesale and B2B trade no
+    card was ever going to settle. This is the other denominator: what
+    households actually spend, which is much closer to what can cross a till.
+
+    ASK publishes the national accounts in thousands of euro; the values are
+    scaled to euro here so nothing downstream has to remember the unit.
+    """
+    path = os.path.join(raw_dir, 'household_consumption.json')
+    if not os.path.exists(path):
+        return None
+    ds = _load(path)['data']
+    dims, size, vals = ds['id'], ds['size'], ds['value']
+    comps, years = _labels(ds, dims[0]), _labels(ds, dims[1])
+
+    def find(needle):
+        for i, c in enumerate(comps):
+            flat = (c or '').lower().replace('ë', 'e')
+            if needle in flat:
+                return i
+        return None
+
+    hh = find('shtepiake')
+    if hh is None:
+        return None
+    gdp = find('bpv me cmime aktuale') or find('bpv me çmime aktuale')
+
+    def series(i):
+        out = {}
+        for yi, y in enumerate(years):
+            v = vals[i * size[1] + yi]
+            if v is not None:
+                out[y] = float(v) * 1000.0     # thousands of euro -> euro
+        return out
+
+    h = series(hh)
+    if not h:
+        return None
+    ys = sorted(h)
+    return {'component': comps[hh],
+            'series': h,
+            'gdp': series(gdp) if gdp is not None else None,
+            'years': ys,
+            'latest_year': ys[-1],
+            'latest': h[ys[-1]],
+            'unit': 'EUR',
+            'note': 'Household final consumption expenditure at current prices, ASK '
+                    'national accounts, published in thousands of euro and scaled '
+                    'here. Annual, and it ends a year before the tax data.'}
+
+
 def turnover_structure(raw_dir):
     """Share of turnover by economic section, ASK structural statistics.
 

@@ -470,6 +470,34 @@
         '<span>ASK structural business statistics · BQK monthly</span>' +
         '<span>·</span><span>Three years apart — read as a bound, not a point</span>');
 
+      const fn = DA.getAcceptanceFunnel();
+      if (fn) {
+        h += sec('From trading to accepting', 'An infrastructure view, not a target') +
+          '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
+          '<th>Step</th><th class="n">Count</th><th class="n">Of the top</th>' +
+          '<th class="n">From previous</th><th>Source</th></tr></thead><tbody>' +
+          fn.steps.map(function (s) {
+            const blocked = s.status === 'BLOCKED';
+            return '<tr' + (blocked ? ' style="color:var(--ink-3)"' : '') + '>' +
+              '<td class="strong">' + U.esc(s.label) + '</td>' +
+              '<td class="n">' + (s.value ? U.exact(s.value) : '—') + '</td>' +
+              '<td class="n">' + (s.of_top ? U.pct(s.of_top, 1) : '—') + '</td>' +
+              '<td class="n">' + (s.from_previous ? U.pct(s.from_previous, 1) : '—') +
+              '</td><td style="font-size:12px">' + U.esc(s.source) +
+              (blocked ? ' <span class="note">blocked</span>' : '') + '</td></tr>';
+          }).join('') + '</tbody></table></div></div>' +
+          disclosure('The rung that is missing, and why it is still listed',
+            '<p>' + U.esc((fn.steps.filter(function (s) {
+              return s.status === 'BLOCKED'; })[0] || {}).note || '') + '</p>' +
+            '<p>It is shown as a blocked step rather than left out, because a funnel ' +
+            'that skips a stage reads as though the stage were not there.</p>' +
+            '<p>There are more terminals than merchants — ' +
+            (fn.terminals_per_merchant ? fn.terminals_per_merchant.toFixed(2) : '—') +
+            ' per accepting merchant — because one merchant may run several.</p>' +
+            '<p>' + U.esc(fn.note) + '</p>') +
+          '</section>';
+      }
+
       h += sec('The base itself', 'Active enterprises, ASK structural statistics') +
         '<div class="card"><div class="card-b" id="cov-base"></div></div>' +
         (ab.formation ? '<div class="card" style="margin-top:12px">' +
@@ -758,6 +786,45 @@
       '<span>ATK declared turnover · BQK Table 15 card value · ASK retail index</span>' +
       '<span>·</span><button data-src="pen">How this is built</button>');
 
+    // The same card value against a denominator that is much closer to what
+    // can actually cross a till. Shown beside the turnover ratio rather than
+    // instead of it, because the distance between the two is the point.
+    const den = DA.getIntensityDenominators();
+    if (den) {
+      const dl = den.latest;
+      h += sec('Against what people actually spend',
+               'Household final consumption, ASK national accounts') +
+        '<div class="card"><div class="card-b" id="pen-denoms"></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>Year</th><th class="n">Card value</th>' +
+        '<th class="n">Of declared turnover</th>' +
+        '<th class="n">Of household consumption</th></tr></thead><tbody>' +
+        den.series.map(function (r) {
+          return '<tr><td class="strong">' + r.year + '</td>' +
+            '<td class="n">' + U.money(r.card_value) + '</td>' +
+            '<td class="n">' + U.pct(r.vs_turnover, 2) + '</td>' +
+            '<td class="n" style="font-weight:600">' + U.pct(r.vs_household, 2) +
+            '</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        'Measured against household spending rather than all declared turnover, ' +
+        '<strong>' + U.pct(dl.vs_household, 1) + '</strong> of consumption settled on ' +
+        'a card in ' + dl.year + ' — ' +
+        (den.ratio_between ? '<strong>' + den.ratio_between.toFixed(1) + '×</strong> ' +
+          'the turnover ratio for the same year' : 'a much higher share') + '. Neither ' +
+        'figure is the addressable market: the first denominator is far too large, ' +
+        'the second leaves out business spending that does settle on cards. The gap ' +
+        'between them is why no single number is quoted as the opportunity.</p>' +
+        '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:64ch;' +
+        'margin-top:12px">National accounts end ' + den.household_year +
+        (den.lags_turnover_by > 0
+          ? ', ' + den.lags_turnover_by + ' year' + (den.lags_turnover_by > 1 ? 's' : '') +
+            ' before the tax data, so the series stops earlier than the one above.'
+          : '.') + '</p></div></div></section>';
+    }
+
     h += sec('The two curves', 'Indexed to ' + F.year + ' = 100') +
       '<div class="grid2" id="pen-charts"></div>' +
       disclosure('What this ratio is, and what it is not',
@@ -821,6 +888,27 @@
     }
 
     host.innerHTML = h;
+
+    if (den && $('#pen-denoms', host)) {
+      $('#pen-denoms', host).appendChild(C.line(
+        den.series.map(function (r) {
+          return { year_month: String(r.year) + '-01',
+                   hh: r.vs_household, to: r.vs_turnover }; }), {
+          w: 660, h: 300, labelEvery: 1, baseZero: true,
+          series: [{ key: 'hh', color: C.colors.purple, fill: true },
+                   { key: 'to', color: C.colors.ink3 }],
+          xFmt: function (r) { return r.year_month.slice(0, 4); },
+          yFmt: function (v) { return (v * 100).toFixed(0) + '%'; },
+          hover: function (r, i) {
+            const s = den.series[i];
+            return { name: String(s.year),
+              value: U.pct(s.vs_household, 2) + ' of household spending',
+              delta: U.pct(s.vs_turnover, 2) + ' of declared turnover' }; } }));
+      $('#pen-denoms', host).insertAdjacentHTML('beforeend',
+        '<div class="sum-legend"><span><i style="background:' + C.colors.purple +
+        '"></i>Of household consumption</span><span><i style="background:' +
+        C.colors.ink3 + '"></i>Of all declared turnover</span></div>');
+    }
 
     const pc = $('#pen-charts', host);
     put(pc, card('Economy against card value', F.year + ' = 100'))
@@ -1096,6 +1184,31 @@
           'Merchant charges and interchange are published by no one.</p>' +
           '</div></div></section>';
       }
+    }
+
+    const con = DA.getConcentration();
+    if (con) {
+      h += sec('Market structure', 'Herfindahl-Hirschman index, 0 to 10,000') +
+        '<div class="card"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>Measured on</th><th class="n">HHI</th><th>Reading</th>' +
+        '<th class="n">Top 3</th><th class="n">Top 5</th></tr></thead><tbody>' +
+        ['terminals', 'transactions', 'value'].map(function (k) {
+          const c = con[k];
+          if (!c) return '';
+          return '<tr><td class="strong">' + U.esc(k.charAt(0).toUpperCase() +
+              k.slice(1)) + '</td>' +
+            '<td class="n" style="font-weight:600">' + U.exact(Math.round(c.hhi)) +
+            '</td><td style="font-size:12.5px;color:var(--ink-2)">' +
+              U.esc(c.band) + '</td>' +
+            '<td class="n">' + U.pct(c.top3, 1) + '</td>' +
+            '<td class="n">' + U.pct(c.top5, 1) + '</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        disclosure('What this index does and does not say',
+          '<p>' + U.esc(con.note) + '</p>' +
+          '<p>It characterises structure and nothing else. Nothing here assesses ' +
+          'competition or conduct, and no conclusion about either follows from a ' +
+          'concentration figure on its own.</p>') +
+        '</section>';
     }
 
     h += sec('Every reporting bank', 'Share of terminals against share of value') +

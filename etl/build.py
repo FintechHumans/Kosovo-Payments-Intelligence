@@ -1067,6 +1067,7 @@ def main():
     ents_size = parse_ask.enterprises_size(RAW_ASK)
     ents_closed = parse_ask.enterprises_closed_by_municipality(RAW_ASK)
     ask_turnover = parse_ask.turnover_structure(RAW_ASK)
+    household = parse_ask.household_consumption(RAW_ASK)
     dogana = load_dogana()
     cmix = channel_mix_payload()
     cards_p = cards_payload()
@@ -1084,6 +1085,9 @@ def main():
         'emerging': LV.emerging_channels(cmix),
         'bank_position': LV.bank_position(kba),
         'acceptance_base': LV.acceptance_base(ents_active, ents_size, pos_default),
+        'intensity_denominators': None,   # filled below; reads penetration
+        'acceptance_funnel': None,        # filled below; reads acceptance_base
+        'concentration': None,            # filled below; reads bank_position
         'formation': LV.business_formation(ents, ents_closed),
         'turnover_cross_check': LV.turnover_cross_check(sec_year, ask_turnover,
                                                         T['dim_sector']),
@@ -1222,6 +1226,13 @@ def main():
                   % cc['max_gap_pp'],
                   table='core.fact_atk_turnover',
                   expected='independent measurement', actual='shared source')
+
+    # These three read other levers, so they are built once the dict exists.
+    lever['intensity_denominators'] = LV.card_intensity_denominators(
+        lever['penetration'], household)
+    lever['acceptance_funnel'] = LV.acceptance_funnel(
+        lever['acceptance_base'], pos_default)
+    lever['concentration'] = LV.market_concentration(lever['bank_position'])
 
     # ---- the acceptance denominator, and what it can and cannot carry
     ab = lever['acceptance_base']
@@ -1405,6 +1416,7 @@ def main():
         enterprises_size=ents_size,
         enterprises_closed=ents_closed,
         ask_turnover_structure=ask_turnover,
+        household_consumption=household,
         verticals=VERT.VERTICALS,
         opportunity_weights=OPP.DEFAULT_WEIGHTS,
         cockpit=cockpit,

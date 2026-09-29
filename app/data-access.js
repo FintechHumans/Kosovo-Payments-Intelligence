@@ -62,6 +62,11 @@
     getOpportunity: function () { return (DB.levers || {}).opportunity || null; },
     getCockpit: function () { return DB.cockpit || null; },
     getFreshness: function () { return DB.freshness || null; },
+    getIntensityDenominators: function () {
+      return (DB.levers || {}).intensity_denominators || null; },
+    getAcceptanceFunnel: function () {
+      return (DB.levers || {}).acceptance_funnel || null; },
+    getConcentration: function () { return (DB.levers || {}).concentration || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
       return (DB.levers || {}).turnover_cross_check || null; },

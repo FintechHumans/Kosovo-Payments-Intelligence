@@ -267,6 +267,55 @@ def benchmarks(pos_monthly, cards, population=KOSOVO_POPULATION):
                     'the ECB release, not recomputed.'}
 
 
+def card_intensity_denominators(penetration_lever, household):
+    """The same card value against two denominators, reported side by side.
+
+    All declared turnover includes wholesale, B2B and government contracting,
+    none of which a card could settle, so the ratio against it is a floor and a
+    poor guide to how far adoption has come. Household final consumption is
+    what people actually spend, which is much closer to what crosses a till.
+
+    Neither is the addressable market. The first is far too large, and the
+    second excludes business spending that does settle on cards. They are shown
+    together because the distance between them is the honest measure of how
+    little either can be read alone.
+    """
+    if not penetration_lever or not household:
+        return None
+    hh = household['series']
+    rows = []
+    for s in penetration_lever['series']:
+        y = str(s['year'])
+        if y not in hh or not hh[y]:
+            continue
+        rows.append({
+            'year': s['year'],
+            'card_value': s['card_value'],
+            'turnover': s['turnover'],
+            'household': hh[y],
+            'vs_turnover': s['penetration'],
+            'vs_household': s['card_value'] / hh[y],
+        })
+    if len(rows) < 2:
+        return None
+    first, last = rows[0], rows[-1]
+    return {
+        'series': rows,
+        'first': first, 'latest': last,
+        'ratio_between': (last['vs_household'] / last['vs_turnover'])
+                         if last['vs_turnover'] else None,
+        'household_year': household['latest_year'],
+        'household_latest': household['latest'],
+        'lags_turnover_by': (penetration_lever['latest']['year']
+                             - int(household['latest_year'])),
+        'note': 'Card value against all declared business turnover, and against '
+                'household final consumption. The first includes trade no card '
+                'could settle; the second excludes business spending that does. '
+                'Neither is the addressable market, and the gap between them is '
+                'why no single figure is quoted as one.',
+    }
+
+
 def acceptance_base(active, size, pos_monthly):
     """How much of the trading economy can present a card at all.
 
@@ -483,6 +532,102 @@ def turnover_cross_check(atk_sector_year, ask_structure, sectors=None):
                     'turnover; without renormalising, ASK would read higher '
                     'everywhere for that reason alone.'
                     % (year, len(pairs), 100.0 - atk_cov / atk_total * 100.0)}
+
+
+def acceptance_funnel(acceptance, pos_monthly):
+    """Active economy -> card-accepting merchants -> terminals.
+
+    One rung is missing and stays missing. Between a trading business and a
+    card-accepting one sits the fiscalised business — the tax administration
+    publishes no open dataset of those, so the step cannot be drawn. It is
+    listed as a blocked rung rather than dropped, because a funnel that skips
+    a stage reads as though the stage were not there.
+
+    Nothing here implies every business should accept cards. It is an
+    infrastructure view: how many places a card can be presented, against how
+    many places exist.
+    """
+    if not acceptance or not pos_monthly:
+        return None
+    last = [r for r in pos_monthly if r.get('terminal_stock')]
+    if not last:
+        return None
+    last = last[-1]
+
+    steps = [
+        {'key': 'active', 'label': 'Businesses trading',
+         'value': acceptance['active_enterprises'],
+         'period': acceptance['active_year'], 'source': 'ASK', 'status': 'PASS'},
+        {'key': 'fiscalised', 'label': 'Of those, fiscalised',
+         'value': None, 'period': None, 'source': 'ATK', 'status': 'BLOCKED',
+         'note': 'ATK publishes no open dataset of fiscalised businesses or of '
+                 'those with turnover above zero, so this rung cannot be drawn.'},
+        {'key': 'merchants', 'label': 'Accepting cards',
+         'value': acceptance['merchants'],
+         'period': acceptance['merchants_period'], 'source': 'BQK', 'status': 'PASS'},
+        {'key': 'terminals', 'label': 'Terminals deployed',
+         'value': last['terminal_stock'],
+         'period': last['year_month'], 'source': 'BQK', 'status': 'PASS',
+         'note': 'More terminals than merchants: a merchant may run several.'},
+    ]
+    known = [s for s in steps if s['value']]
+    for i, s in enumerate(known):
+        s['of_top'] = s['value'] / known[0]['value'] if known[0]['value'] else None
+        s['from_previous'] = (s['value'] / known[i - 1]['value']) if i else None
+
+    m = acceptance['merchants']
+    return {
+        'steps': steps,
+        'terminals_per_merchant': (last['terminal_stock'] / m) if m else None,
+        'blocked_rungs': [s['key'] for s in steps if s['status'] == 'BLOCKED'],
+        'note': 'An infrastructure view, not a target. Nothing here implies every '
+                'trading business should accept cards, and the two ends are years '
+                'apart, so the narrowing is a bound rather than a rate.',
+    }
+
+
+def market_concentration(bank_position):
+    """HHI and top-N shares, for describing market structure and nothing else.
+
+    Computed on the banks that report. Two report nothing, so the index
+    describes the reporting market rather than the whole one, and it is stated
+    that way. HHI is used here to characterise structure, never to assess
+    competition or to imply anything about conduct.
+    """
+    if not bank_position or not bank_position.get('banks'):
+        return None
+    rows = bank_position['banks']
+
+    def hhi(key):
+        return sum((r[key] * 100.0) ** 2 for r in rows)
+
+    def top(key, n):
+        return sum(sorted((r[key] for r in rows), reverse=True)[:n])
+
+    out = {'reporting_banks': len(rows),
+           'silent_banks': bank_position.get('silent') or []}
+    for key, label in (('share_pos', 'terminals'),
+                       ('share_tx', 'transactions'),
+                       ('share_value', 'value')):
+        out[label] = {
+            'hhi': round(hhi(key), 1),
+            'top3': top(key, 3),
+            'top5': top(key, 5),
+            # The conventional reading of HHI, stated so the number is not
+            # left to be interpreted by whoever sees it first.
+            'band': ('concentrated' if hhi(key) >= 2500
+                     else 'moderately concentrated' if hhi(key) >= 1500
+                     else 'unconcentrated'),
+        }
+    out['note'] = ('Herfindahl-Hirschman index over the %d banks that report, on a '
+                   '0 to 10,000 scale. %s report nothing and are excluded, so this '
+                   'describes the reporting market rather than the whole one. It '
+                   'characterises structure only: nothing here assesses competition '
+                   'or conduct, and the underlying extract carries no reporting '
+                   'period.'
+                   % (len(rows), ' and '.join(bank_position.get('silent') or [])
+                      or 'No banks'))
+    return out
 
 
 def acceptance_headroom(geo, enterprises):

@@ -62,6 +62,12 @@ TABLES = {
     'enterprises_closed': ['Statistical business register', 'Quarterly indicators',
                            'tab11r.px'],
 
+    # Household final consumption: what people actually spend, which is far
+    # closer to what a card at a till could settle than all declared business
+    # turnover is. PART 24 of the brief asks for this denominator by name.
+    'household_consumption': ['National and government accounts', 'National accounts',
+                              'Annual national accounts', 'gdp13.px'],
+
     # Turnover by economic section, from the statistics agency rather than the
     # tax administration. Two institutions measuring the same quantity by
     # different methods is worth having: where they agree the figure is firmer,
