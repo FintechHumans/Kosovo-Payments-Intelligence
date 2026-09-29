@@ -60,9 +60,12 @@
       group: 'secondary', filters: ['period', 'universe'] },
     { id: 'payments', n: '13', nav: 'Payment behaviour',  title: 'Payment behaviour',
       q: 'How are people paying?', group: 'secondary', filters: ['period'] },
-    { id: 'quality',  n: '14', nav: 'Data quality',       title: 'Data quality',
+    { id: 'audit',    n: '14', nav: 'Audit report',       title: 'Data & decision audit',
+      q: 'What holds up every source, measure, mapping and conclusion?',
+      group: 'secondary', filters: [] },
+    { id: 'quality',  n: '15', nav: 'Data quality',       title: 'Data quality',
       q: 'Can I trust these numbers?', group: 'secondary', filters: [] },
-    { id: 'method',   n: '15', nav: 'Methodology',        title: 'Methodology',
+    { id: 'method',   n: '16', nav: 'Methodology',        title: 'Methodology',
       q: 'How exactly was this calculated?', group: 'secondary', filters: [] }
   ];
   const PAGE = {};
@@ -853,6 +856,7 @@
   const OPS = window.OpsPages || {};
   const RENDER = {
     cockpit: function () { window.Cockpit.render($('#page-cockpit')); },
+    audit: function () { window.AuditReport.render($('#page-audit')); },
     home: renderHome,
     penetration: function () { OPS.renderPenetration($('#page-penetration'), state); },
     conclusion: function () { OPS.renderConclusion($('#page-conclusion'), state); },

@@ -41,6 +41,7 @@ import parse_findex
 import verticals as VERT
 import opportunity as OPP
 import cockpit as CK
+import audit_report as AR
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -1483,6 +1484,11 @@ def main():
     )
 
     os.makedirs(CURATED, exist_ok=True)
+    # The audit rates the payload, so it is built from the finished payload and
+    # then folded back into it. Deriving it any earlier would rate a half-built
+    # object and quietly disagree with what the report renders.
+    payload['audit'] = AR.build(payload)
+
     with open(os.path.join(CURATED, 'dashboard.json'), 'w', encoding='utf-8') as f:
         json.dump(payload, f, separators=(',', ':'), ensure_ascii=False)
     with open(os.path.join(BASE, 'app', 'data.js'), 'w', encoding='utf-8') as f:

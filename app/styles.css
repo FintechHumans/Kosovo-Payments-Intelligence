@@ -653,3 +653,34 @@ body.tool .back-summary{display:block}
 .ck-fresh-date{font-family:var(--mono);font-size:13px;font-weight:600;
   color:var(--ink);margin-top:3px}
 .ck-fresh-none .ck-fresh-date{color:var(--neg);font-weight:500}
+
+/* ======================= audit report ======================= */
+/* A rating is a claim about evidence, so each row carries its basis and its
+   limit beside it rather than a colour alone. */
+.au-counts{display:flex;gap:6px;flex-wrap:wrap}
+.au-pill{font-size:10.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;padding:4px 8px;border-radius:2px}
+.au-pill.au-pass{background:rgba(20,99,74,.1);color:var(--pos)}
+.au-pill.au-warning{background:rgba(140,74,0,.1);color:var(--neg)}
+.au-pill.au-blocked{background:rgba(26,31,54,.08);color:var(--ink-2)}
+.au-pill.au-fail{background:rgba(140,74,0,.18);color:var(--neg)}
+
+.au-row td{vertical-align:top;padding:12px 14px;border-bottom:1px solid var(--rule)}
+.au-rating{white-space:nowrap;font-size:10.5px;font-weight:700;letter-spacing:.07em;
+  width:112px;font-family:var(--mono)}
+.au-dot{width:7px;height:7px;border-radius:50%;display:inline-block;
+  margin-right:7px;vertical-align:middle}
+.au-pass .au-dot{background:var(--pos)}   .au-pass .au-rating{color:var(--pos)}
+.au-warning .au-dot{background:var(--neg)} .au-warning .au-rating{color:var(--neg)}
+.au-blocked .au-dot{background:var(--ink-3)} .au-blocked .au-rating{color:var(--ink-3)}
+.au-fail .au-dot{background:var(--neg)}    .au-fail .au-rating{color:var(--neg)}
+.au-title{font-size:13.5px;font-weight:600;letter-spacing:-.01em}
+.au-basis{font-size:12.5px;color:var(--ink-2);line-height:1.55;margin-top:4px;
+  max-width:88ch;font-variant-numeric:tabular-nums}
+.au-lim{font-size:12px;color:var(--ink-3);line-height:1.55;margin-top:5px;
+  max-width:88ch}
+.au-clears{font-size:12px;color:var(--ink-2);line-height:1.5;margin-top:5px;
+  max-width:88ch}
+.au-clears strong{color:var(--ink)}
+
+@media (max-width:900px){ .au-rating{width:auto} }
