@@ -44,6 +44,7 @@ import cockpit as CK
 import audit_report as AR
 import opportunity_geo as OG
 import decisions as DEC
+import scenario as SCN
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -1516,6 +1517,8 @@ def main():
     # The audit rates the payload, so it is built from the finished payload and
     # then folded back into it. Deriving it any earlier would rate a half-built
     # object and quietly disagree with what the report renders.
+    payload['scenario'] = SCN.build(pos_default, lever['benchmarks'],
+                                   lever['bank_position'], lever.get('geo_opportunity'))
     payload['decisions'] = DEC.build(lever, payload['meta'])
     payload['audit'] = AR.build(payload)
 

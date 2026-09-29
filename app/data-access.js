@@ -71,6 +71,7 @@
     getRegional: function () { return DB.regional || null; },
     getAudit: function () { return DB.audit || null; },
     getDecisions: function () { return DB.decisions || null; },
+    getScenario: function () { return DB.scenario || null; },
     getGeoOpportunity: function () { return (DB.levers||{}).geo_opportunity || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
