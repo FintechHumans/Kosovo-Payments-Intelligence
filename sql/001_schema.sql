@@ -455,6 +455,81 @@ create index if not exists ix_pos_tx_def on core.fact_pos_transactions (definiti
 create index if not exists ix_pos_st_def on core.fact_pos_terminal_stock (definition_id, date_id);
 
 -- ============================================================================
+-- LAYER 2 — the bank's own position, and LAYER 3 — unit economics
+--
+-- Empty by design. Nothing in this project fabricates an internal figure, so
+-- these exist to be filled by the bank and are useless until they are. Building
+-- them now fixes the grain, the keys and the vocabulary while the market layer
+-- is fresh, so internal data arrives into a shape that already joins rather
+-- than one invented around whatever the first export happens to look like.
+--
+-- NO PERSON APPEARS HERE. Every table is an aggregate by period, place and
+-- vertical: no customer, no merchant name, no account, no identifier. The
+-- commercial questions are about segments, and a segment answer never needs a
+-- person in the row. etl/load_internal.py refuses a file that carries one.
+-- ============================================================================
+
+create table if not exists core.dim_mcc (
+    mcc            text primary key,
+    mcc_description text,
+    vertical_id    text,
+    confidence     text check (confidence in ('high','medium','low')),
+    mapping_version text not null,
+    note           text
+);
+
+create table if not exists core.fact_nlb_terminals (
+    date_id        integer not null references core.dim_date(date_id),
+    geography_id   integer not null references core.dim_geography(geography_id),
+    -- An inactive terminal costs what an active one costs and earns nothing,
+    -- which is the whole reason this column exists.
+    status         text not null check (status in ('ACTIVE','INACTIVE','TOTAL')),
+    terminal_count numeric,
+    source_note    text,
+    loaded_at      timestamptz not null default now(),
+    primary key (date_id, geography_id, status)
+);
+
+create table if not exists core.fact_nlb_merchants (
+    date_id        integer not null references core.dim_date(date_id),
+    geography_id   integer not null references core.dim_geography(geography_id),
+    vertical_id    text,
+    merchant_count numeric,
+    -- Counts, never a customer list. Cross-sell is a segment question.
+    with_deposit   numeric,
+    with_lending   numeric,
+    loaded_at      timestamptz not null default now(),
+    primary key (date_id, geography_id, vertical_id)
+);
+
+create table if not exists core.fact_nlb_transactions (
+    date_id           integer not null references core.dim_date(date_id),
+    geography_id      integer not null references core.dim_geography(geography_id),
+    vertical_id       text,
+    -- On-us settles inside the bank and off-us does not, and they do not earn
+    -- the same, so they are never summed into one row.
+    settlement        text not null check (settlement in ('ON_US','OFF_US','ALL')),
+    transaction_count numeric,
+    transaction_value numeric,
+    loaded_at         timestamptz not null default now(),
+    primary key (date_id, geography_id, vertical_id, settlement)
+);
+
+-- Rates, not results. No default row is seeded: a plausible placeholder would
+-- become the answer.
+create table if not exists core.nlb_unit_economics (
+    effective_from      date not null,
+    scope               text not null default 'DEFAULT',
+    mdr_bps             numeric,
+    interchange_bps     numeric,
+    scheme_bps          numeric,
+    terminal_cost_month numeric,
+    servicing_month     numeric,
+    note                text,
+    primary key (effective_from, scope)
+);
+
+-- ============================================================================
 -- ANALYTICS — one authoritative formula per KPI
 -- ============================================================================
 

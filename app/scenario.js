@@ -249,6 +249,30 @@
 
     h += '<div class="sc-grid" id="sc-grid"></div>';
 
+    // The three layers, so the reason the chain stops is architecture rather
+    // than an oversight the reader has to infer.
+    const layers = DA.getLayers();
+    if (layers) {
+      h += '<section class="sec" style="margin-top:var(--s6)">' +
+        '<div class="sec-head"><h2>Three layers</h2><span class="sub">' +
+        'Market opportunity, the bank’s position, the economics</span></div>' +
+        '<div class="sc-layers">' +
+        layers.map(function (l) {
+          return '<div class="sc-layer sc-l-' + l.status.toLowerCase() + '">' +
+            '<div class="sc-l-head"><span class="sc-l-n">' + l.n + '</span>' +
+            '<h3>' + U.esc(l.name) + '</h3>' +
+            '<span class="sc-l-status">' + U.esc(l.status) + '</span></div>' +
+            '<p class="sc-l-detail">' + U.esc(l.detail) + '</p>' +
+            '<p class="sc-l-note">' + U.esc(l.note) + '</p></div>';
+        }).join('') + '</div>' +
+        '<p class="note" style="margin-top:10px">The file contract for layers ' +
+        'two and three is in <code>data/internal/</code>, and ' +
+        '<code>etl/load_internal.py --check</code> validates against it. It ' +
+        'refuses any file carrying a person-level column, because these ' +
+        'questions are about segments and a segment answer never needs a person ' +
+        'in the row.</p></section>';
+    }
+
     h += '<section class="sec" style="margin-top:var(--s6)">' +
       '<div class="sec-head"><h2>The chain</h2><span class="sub">What is ' +
       'measured, what you assumed, and what only you can supply</span></div>' +

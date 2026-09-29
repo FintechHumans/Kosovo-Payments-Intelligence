@@ -1517,6 +1517,37 @@ def main():
     # The audit rates the payload, so it is built from the finished payload and
     # then folded back into it. Deriving it any earlier would rate a half-built
     # object and quietly disagree with what the report renders.
+    # The three-layer state, reported rather than assumed. Layer 2 and 3 are
+    # empty until the bank supplies them, and the page says which of the four
+    # contracts have been filled rather than implying the whole chain works.
+    internal_dir = os.path.join(BASE, 'data', 'internal')
+    contracts = ['nlb_terminals', 'nlb_merchants', 'nlb_transactions',
+                 'nlb_unit_economics']
+    supplied = [c for c in contracts
+                if os.path.exists(os.path.join(internal_dir, c + '.csv'))]
+    payload['layers'] = [
+        {'n': 1, 'name': 'Market opportunity', 'status': 'LOADED',
+         'detail': '%d institutions, %d sources'
+                   % (len({s_['institution'] for s_ in T['data_sources']}),
+                      len(T['data_sources'])),
+         'note': 'Public and supplied market data. Stands on its own, which is '
+                 'why it was built first.'},
+        {'n': 2, 'name': "The bank's own position", 'status':
+            'PARTIAL' if supplied else 'AWAITING',
+         'detail': '%d of 3 contracts supplied' % len([c for c in supplied
+                                                       if c != 'nlb_unit_economics']),
+         'note': 'Terminals active and inactive, merchants by vertical with '
+                 'deposit and lending counts, transactions split on-us and '
+                 'off-us. Tables exist and are empty; nothing is estimated in '
+                 'their place.'},
+        {'n': 3, 'name': 'Unit economics', 'status':
+            'LOADED' if 'nlb_unit_economics' in supplied else 'AWAITING',
+         'detail': 'merchant discount, interchange, scheme, terminal, servicing',
+         'note': 'Published by nobody. Until supplied, every figure in this '
+                 'report stops at payment volume — which is the honest answer, '
+                 'not a gap to work around.'},
+    ]
+
     payload['scenario'] = SCN.build(pos_default, lever['benchmarks'],
                                    lever['bank_position'], lever.get('geo_opportunity'))
     payload['decisions'] = DEC.build(lever, payload['meta'])

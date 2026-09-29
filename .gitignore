@@ -2,3 +2,5 @@ data/raw/
 __pycache__/
 .claude/
 data/raw/dogana/
+data/internal/*.csv
+!data/internal/*.template.csv

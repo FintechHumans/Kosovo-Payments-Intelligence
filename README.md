@@ -430,8 +430,17 @@ proxy and is not the same thing; it is labelled as a proxy wherever it appears.
 There is no published count of businesses trading in a given municipality, so
 acceptance rate exists only nationally.
 
-`core` reserves `fact_nlb_*` against the same date, geography, sector and
-channel dimensions, so Phase 2 attaches without reshaping Phase 1.
+`core` now carries the Layer 2 tables — `fact_nlb_terminals`,
+`fact_nlb_merchants`, `fact_nlb_transactions`, `dim_mcc` — and the Layer 3
+`nlb_unit_economics`, against the same date, geography and vertical dimensions
+the market layer uses. They are empty, and that is the point: the grain and the
+vocabulary are fixed now, so internal data arrives into a shape that already
+joins. `data/internal/` holds the file contract and `etl/load_internal.py`
+validates against it, refusing any file that carries a person-level column or a
+municipality name that would never join.
+
+An earlier version of this file claimed those tables were already reserved.
+They were not; the claim is now true.
 
 ## Sources
 
