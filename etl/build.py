@@ -37,6 +37,7 @@ import openpyxl
 import mappings as M
 import parse_ask
 import parse_kba
+import parse_findex
 import verticals as VERT
 import opportunity as OPP
 import cockpit as CK
@@ -47,6 +48,7 @@ BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW_ATK = os.path.join(BASE, 'data', 'raw', 'atk')
 RAW_BQK = os.path.join(BASE, 'data', 'raw', 'bqk')
 RAW_ASK = os.path.join(BASE, 'data', 'raw', 'ask')
+RAW_FINDEX = os.path.join(BASE, 'data', 'raw', 'findex')
 # Not data/raw: nothing here was downloaded. The KBA extract was supplied as
 # bank totals, so it is committed with the project and carries no file hash.
 SUPPLIED = os.path.join(BASE, 'data', 'supplied')
@@ -1069,6 +1071,7 @@ def main():
     ask_turnover = parse_ask.turnover_structure(RAW_ASK)
     household = parse_ask.household_consumption(RAW_ASK)
     tourism = parse_ask.tourism_monthly(RAW_ASK)
+    findex = parse_findex.load(RAW_FINDEX)
     dogana = load_dogana()
     cmix = channel_mix_payload()
     cards_p = cards_payload()
@@ -1099,6 +1102,33 @@ def main():
                                  VERT.VERTICALS, VERT.ask_retail_vertical,
                                  sec_year, VERT.atk_section_vertical),
     }
+
+    if findex:
+        check('regional_benchmark', 'ingest', 'info', True,
+              'Regional benchmark from World Bank Findex, %s: one questionnaire '
+              'run in every country, which national payment statistics cannot '
+              'offer because each central bank publishes on its own basis.'
+              % ', '.join(findex['years']),
+              table='analytics.regional_benchmark')
+
+        check('findex_counts_people', 'model', 'warning', False,
+              'Findex counts PEOPLE and the rest of this report counts PAYMENTS. '
+              'It says who holds a card, never what was spent on one, and the two '
+              'are never divided into each other. A country can rank well on '
+              'ownership and badly on usage.',
+              table='analytics.regional_benchmark',
+              expected='payments', actual='cardholders')
+
+        for sup in findex.get('suppressed') or []:
+            check('findex_zero_is_absent', 'ingest', 'warning', False,
+                  '%s reports exactly 0.0%% for %s in %s after %.1f%% in an earlier '
+                  'wave. A survey percentage cannot collapse that way; it is a '
+                  'missing value encoded as a number, and it is dropped rather than '
+                  'ranked. Taking it at face value would have put a euro-area '
+                  'country last on card ownership.'
+                  % (sup['country'], sup['indicator'], sup['year'], sup['prior_max']),
+                  table='analytics.regional_benchmark',
+                  expected='null', actual='0.0')
 
     # ---- what the customs file is, and what it can carry
     if dogana:
@@ -1421,6 +1451,7 @@ def main():
         ask_turnover_structure=ask_turnover,
         household_consumption=household,
         tourism=tourism,
+        regional=findex,
         verticals=VERT.VERTICALS,
         opportunity_weights=OPP.DEFAULT_WEIGHTS,
         cockpit=cockpit,

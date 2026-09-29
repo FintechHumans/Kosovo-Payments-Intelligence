@@ -451,6 +451,53 @@
       '<td class="n">' + U.pct(bm.productivity_index, 0) + '</td></tr>' +
       '</tbody></table></div></div></section>';
 
+    // The neighbours, on the one measure that is genuinely comparable across
+    // them. National payment statistics are not: each central bank publishes
+    // on its own basis, so six of those side by side would compare six
+    // definitions. A survey run to one questionnaire does not have that
+    // problem — at the cost of measuring people rather than payments.
+    const rg = DA.getRegional();
+    if (rg) {
+      h += sec('The neighbours', 'World Bank Findex · ' + rg.years.join(', ')) +
+        rg.indicators.map(function (ind) {
+          return '<div class="card" style="margin-top:12px">' +
+            '<div class="card-h"><h3>' + U.esc(ind.label) + '</h3>' +
+            '<span class="note">' + ind.year +
+            (ind.missing && ind.missing.length
+              ? ' · no data for ' + U.esc(ind.missing.join(', ')) : '') +
+            '</span></div>' +
+            '<div class="card-b" id="rg-' + U.esc(ind.code.replace(/[^a-z0-9]/gi, '')) +
+            '"></div></div>';
+        }).join('') +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        rg.indicators.map(function (i) {
+          return 'On ' + i.label.toLowerCase() + ', Kosovo ranks <strong>' +
+            i.focus_rank + ' of ' + i.of + '</strong> at ' +
+            U.pct(i.focus_value / 100, 1) + '.';
+        }).join(' ') + '</p>' +
+        '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:64ch;' +
+        'margin-top:12px">' + U.esc(rg.limitation) + '</p></div></div>' +
+        disclosure('Why a survey and not central-bank statistics',
+          '<p>' + U.esc(rg.note) + '</p>' +
+          ((rg.suppressed && rg.suppressed.length)
+            ? '<p><strong>One point was dropped.</strong> ' +
+              rg.suppressed.map(function (s) {
+                return U.esc(s.country) + ' reports exactly 0.0% for ' +
+                  U.esc(s.indicator) + ' in ' + s.year + ' after ' +
+                  s.prior_max.toFixed(1) + '% in an earlier wave. A survey ' +
+                  'percentage cannot collapse that way — it is a missing value ' +
+                  'encoded as a number, and ranking it would have put a euro-area ' +
+                  'country last on card ownership.';
+              }).join(' ') + '</p>' : '') +
+          '<p>Each indicator uses the most recent wave that includes Kosovo and at ' +
+          'least four peers, so a country absent from one wave does not drag the ' +
+          'whole comparison back years. Where a country is missing, it is named ' +
+          'above the chart rather than left as a silent gap.</p>') +
+        '</section>';
+    }
+
     h += sec('Growth', 'Kosovo against the euro area, year on year') +
       '<div class="card"><div class="card-b" id="pos-growth"></div></div>' +
       '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
@@ -476,6 +523,22 @@
       '</section>';
 
     host.innerHTML = h;
+
+    if (rg) {
+      rg.indicators.forEach(function (ind) {
+        const el = $('#rg-' + ind.code.replace(/[^a-z0-9]/gi, ''), host);
+        if (!el) return;
+        el.appendChild(C.hbars(ind.rows.map(function (r) {
+          return { label: r.country, value: r.value,
+            color: r.is_focus ? C.colors.purple : C.colors.purpleSoft,
+            tip: function () {
+              return { name: r.country, value: r.value.toFixed(1) + '%',
+                delta: ind.label + ', ' + ind.year }; } };
+        }), { w: 660, rowH: 28,
+              fmt: function (v) { return v.toFixed(1) + '%'; },
+              pad: { t: 6, r: 74, b: 6, l: 150 } }));
+      });
+    }
 
     $('#pos-growth', host).appendChild(C.bars(
       bm.growth.filter(function (g) { return g.kosovo != null; }).map(function (g) {
