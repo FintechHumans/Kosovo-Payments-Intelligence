@@ -62,6 +62,11 @@ TABLES = {
     'enterprises_closed': ['Statistical business register', 'Quarterly indicators',
                            'tab11r.px'],
 
+    # Visitors and overnight stays by month. Foreign card value at Kosovo POS
+    # peaks every summer; this is the series that says whether the people
+    # carrying those cards are arriving as visitors.
+    'tourism_month': ['Tourism and hotels', 'Treguesit mujorë', 'tab01.px'],
+
     # Household final consumption: what people actually spend, which is far
     # closer to what a card at a till could settle than all declared business
     # turnover is. PART 24 of the brief asks for this denominator by name.

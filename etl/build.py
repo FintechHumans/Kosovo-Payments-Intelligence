@@ -1068,6 +1068,7 @@ def main():
     ents_closed = parse_ask.enterprises_closed_by_municipality(RAW_ASK)
     ask_turnover = parse_ask.turnover_structure(RAW_ASK)
     household = parse_ask.household_consumption(RAW_ASK)
+    tourism = parse_ask.tourism_monthly(RAW_ASK)
     dogana = load_dogana()
     cmix = channel_mix_payload()
     cards_p = cards_payload()
@@ -1088,6 +1089,8 @@ def main():
         'intensity_denominators': None,   # filled below; reads penetration
         'acceptance_funnel': None,        # filled below; reads acceptance_base
         'concentration': None,            # filled below; reads bank_position
+        'foreign_pulse': LV.foreign_card_pulse(
+            pos_monthly('pos_t15_allcards'), pos_monthly('pos_t15_domestic'), tourism),
         'formation': LV.business_formation(ents, ents_closed),
         'turnover_cross_check': LV.turnover_cross_check(sec_year, ask_turnover,
                                                         T['dim_sector']),
@@ -1417,6 +1420,7 @@ def main():
         enterprises_closed=ents_closed,
         ask_turnover_structure=ask_turnover,
         household_consumption=household,
+        tourism=tourism,
         verticals=VERT.VERTICALS,
         opportunity_weights=OPP.DEFAULT_WEIGHTS,
         cockpit=cockpit,

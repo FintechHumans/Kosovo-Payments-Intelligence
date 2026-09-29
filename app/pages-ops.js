@@ -277,6 +277,53 @@
         '</div><div class="grid2" id="em-charts"></div></section>';
     }
 
+    // Where the card was issued is a composition question, so it belongs on
+    // this page. It is also the largest single one: more than a quarter of POS
+    // value is on a card issued abroad.
+    const fp = DA.getForeignPulse();
+    if (fp) {
+      h += sec('Cards issued abroad', 'Twelve months to ' +
+               U.monthLabel(fp.window[1])) +
+        '<div class="card"><div class="card-b" id="mix-foreign"></div></div>' +
+        '<div class="kpis" style="margin-top:12px">' +
+        U.kpiTile({ label: 'Foreign-card value, 12 months',
+          value: fp.annual_foreign_value, display: U.money(fp.annual_foreign_value),
+          foot: U.pct(fp.annual_share, 1) + ' of all POS value' }) +
+        U.kpiTile({ label: 'Peak month', value: fp.peak.share,
+          display: U.pct(fp.peak.share, 1),
+          foot: U.monthLabel(fp.peak.year_month) }) +
+        U.kpiTile({ label: 'Trough month', value: fp.trough.share,
+          display: U.pct(fp.trough.share, 1),
+          foot: U.monthLabel(fp.trough.year_month) }) +
+        U.kpiTile({ label: 'Seasonal swing', value: fp.swing_pp,
+          display: (fp.swing_pp * 100).toFixed(1) + ' pp',
+          foot: 'peak against trough' }) +
+        '</div>' +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        '<strong>' + U.money(fp.annual_foreign_value) + '</strong> of POS value over ' +
+        'the last twelve months was spent on a card issued outside Kosovo — ' +
+        U.pct(fp.annual_share, 1) + ' of the total, rising to ' +
+        U.pct(fp.peak.share, 1) + ' in ' + U.monthLabel(fp.peak.year_month) +
+        ' and falling to ' + U.pct(fp.trough.share, 1) + ' in ' +
+        U.monthLabel(fp.trough.year_month) + '. A terminal that looks ordinary in ' +
+        'winter carries a materially different mix in August.</p>' +
+        '<p style="font-size:12px;color:var(--ink-3);line-height:1.6;max-width:64ch;' +
+        'margin-top:12px">This says where the card was issued, never who held it: a ' +
+        'returning member of the diaspora and a tourist are the same row.</p>' +
+        '</div></div>' +
+        disclosure('How this series is derived, and what sits beside it',
+          '<p>' + U.esc(fp.note) + '</p>' +
+          (fp.tourism
+            ? '<p><strong>Visitors, for context.</strong> ' +
+              U.esc(fp.tourism.note) + '</p>' : '') +
+          '<p>Months before the foreign split begins give a difference of zero. ' +
+          'Those are absence rather than a month when no foreign card was used, so ' +
+          'they are dropped instead of carried as zeroes.</p>') +
+        '</section>';
+    }
+
     h += sec('The card estate', 'What the market carries') +
       '<div class="grid2" id="mix-cards"></div></section>';
 
@@ -321,6 +368,24 @@
                 rows: [['Period', U.monthLabel(r.year_month)],
                        ['Source', 'BQK, payments by instrument']] }; } }));
       });
+    }
+
+    if (fp && $('#mix-foreign', host)) {
+      const recent = fp.series.slice(-36);
+      $('#mix-foreign', host).appendChild(C.line(
+        recent.map(function (r) {
+          return { year_month: r.year_month, s: r.share }; }), {
+          w: 660, h: 300, labelEvery: 4,
+          series: [{ key: 's', color: C.colors.gold, fill: true }],
+          yFmt: function (v) { return (v * 100).toFixed(0) + '%'; },
+          hover: function (r, i) {
+            const s = recent[i];
+            return { name: U.monthLabel(s.year_month),
+              value: U.pct(s.share, 1) + ' on foreign cards',
+              delta: U.money(s.foreign_value) + ' of ' + U.money(s.total_value) }; } }));
+      $('#mix-foreign', host).insertAdjacentHTML('beforeend',
+        '<div class="sum-legend"><span>Share of POS value on cards issued outside ' +
+        'Kosovo, last three years</span></div>');
     }
 
     const cardHost = $('#mix-cards', host);

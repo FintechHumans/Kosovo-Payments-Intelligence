@@ -238,6 +238,29 @@ def build(levers, meta):
             'Bulk-dominated categories sit outside the headline because their '
             'import line moves with a world price rather than with demand.'))
 
+    # ---- foreign cards
+    fp = L.get('foreign_pulse')
+    if fp:
+        cards.append(_card(
+            'foreign', 'Foreign-card activity',
+            'How much of what crosses a terminal was issued abroad?',
+            _dir(fp['latest'].get('yoy'), 'Rising', 'Easing'),
+            '%s over twelve months, %.1f%% of POS value'
+            % (_money(fp['annual_foreign_value']), fp['annual_share'] * 100),
+            ['Peaks at %.1f%% in %s, falls to %.1f%% in %s'
+             % (fp['peak']['share'] * 100, fp['peak']['year_month'],
+                fp['trough']['share'] * 100, fp['trough']['year_month']),
+             'A seasonal swing of %.1f points' % (fp['swing_pp'] * 100),
+             ('Latest month %+.1f%% on the same month a year earlier'
+              % (fp['latest']['yoy'] * 100)) if fp['latest'].get('yoy') else None],
+            'A quarter of terminal value is settled on cards issued elsewhere, and '
+            'the share moves by more than twenty points between winter and August. '
+            'A terminal that looks ordinary in November carries a different mix in '
+            'summer.',
+            'PASS', ['BQK'],
+            'This says where a card was issued, never who held it: a returning '
+            'member of the diaspora and a tourist are the same row.'))
+
     # ---- 8. margin composition
     if mix and mix.get('first') and mix.get('latest'):
         a, b = mix['first'], mix['latest']

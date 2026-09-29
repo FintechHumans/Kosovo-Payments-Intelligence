@@ -534,6 +534,83 @@ def turnover_cross_check(atk_sector_year, ask_structure, sectors=None):
                     % (year, len(pairs), 100.0 - atk_cov / atk_total * 100.0)}
 
 
+def foreign_card_pulse(t15_all, t15_domestic, tourism=None):
+    """Foreign-card spending at Kosovo terminals, and when it arrives.
+
+    BQK publishes no foreign-card series directly. It publishes two that
+    differ by exactly that: Table 15 domestic-plus-foreign, and Table 15
+    domestic only. The difference is foreign-card value, and because both
+    sides come from the same table and the same universe, subtracting them is
+    sound in a way that subtracting across publications would not be.
+
+    Months before the foreign split begins produce a difference of zero. Those
+    are absence, not a month when no foreign card was used, so they are
+    dropped rather than carried as zeroes.
+    """
+    if not t15_all or not t15_domestic:
+        return None
+    dom = {r['year_month']: r for r in t15_domestic}
+    rows = []
+    for r in t15_all:
+        m = r['year_month']
+        d = dom.get(m)
+        if not d or not r.get('tx_value') or not d.get('tx_value'):
+            continue
+        fv = r['tx_value'] - d['tx_value']
+        fc = (r.get('tx_count') or 0) - (d.get('tx_count') or 0)
+        if fv <= 0:
+            continue
+        rows.append({'year_month': m,
+                     'foreign_value': fv, 'foreign_count': fc,
+                     'total_value': r['tx_value'],
+                     'share': fv / r['tx_value'],
+                     'foreign_ticket': (fv / fc) if fc > 0 else None})
+    if len(rows) < 13:
+        return None
+    rows.sort(key=lambda x: x['year_month'])
+
+    # Same calendar month a year earlier, never an adjacent one.
+    by = {r['year_month']: r for r in rows}
+    for r in rows:
+        y, mm = r['year_month'].split('-')
+        prv = by.get('%04d-%s' % (int(y) - 1, mm))
+        r['yoy'] = (r['foreign_value'] / prv['foreign_value'] - 1) if prv else None
+
+    last12 = rows[-12:]
+    peak = max(last12, key=lambda r: r['share'])
+    trough = min(last12, key=lambda r: r['share'])
+    out = {
+        'series': rows,
+        'latest': rows[-1],
+        'window': [last12[0]['year_month'], last12[-1]['year_month']],
+        'peak': peak, 'trough': trough,
+        'swing_pp': peak['share'] - trough['share'],
+        'annual_foreign_value': sum(r['foreign_value'] for r in last12),
+        'annual_share': (sum(r['foreign_value'] for r in last12)
+                         / sum(r['total_value'] for r in last12)),
+        'note': 'Foreign-card value is the difference between two BQK Table 15 '
+                'series that share a universe, so the subtraction is internally '
+                'consistent. It says where the card was issued, never who held it: '
+                'a returning member of the diaspora and a tourist are the same row.',
+    }
+    if tourism and tourism.get('foreign_visitors'):
+        fv = tourism['foreign_visitors']
+        joined = [{'year_month': r['year_month'],
+                   'share': r['share'],
+                   'visitors': fv[r['year_month']]}
+                  for r in rows if r['year_month'] in fv]
+        if len(joined) >= 12:
+            out['tourism'] = {
+                'series': joined,
+                'latest': tourism['latest'],
+                'note': 'Visitor counts cover registered accommodation only, so they '
+                        'miss anyone staying with family — which in Kosovo is most '
+                        'of the summer diaspora. The two series move together; the '
+                        'visitor line is context, not an explanation.',
+            }
+    return out
+
+
 def acceptance_funnel(acceptance, pos_monthly):
     """Active economy -> card-accepting merchants -> terminals.
 

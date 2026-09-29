@@ -221,6 +221,80 @@ def _total_row(labels):
     return None
 
 
+def tourism_monthly(raw_dir):
+    """Foreign and domestic visitors by month, national totals.
+
+    Four dimensions, and only the published totals are read: the 'Gjithsej'
+    region row and the 'Gjithsej' origin row are used as published rather than
+    summed from their parts, because both exist in the table and summing on
+    top of them would double the figure.
+    """
+    path = os.path.join(raw_dir, 'tourism_month.json')
+    if not os.path.exists(path):
+        return None
+    ds = _load(path)['data']
+    dims, size, vals = ds['id'], ds['size'], ds['value']
+    periods = _labels(ds, dims[0])
+    regions = _labels(ds, dims[1])
+    origins = _labels(ds, dims[2])
+    measures = _labels(ds, dims[3])
+
+    def idx_of(labels, *starts):
+        for i, x in enumerate(labels):
+            low = (x or '').strip().lower()
+            if any(low.startswith(w) for w in starts):
+                return i
+        return None
+
+    # The origin dimension carries a published 'Gjithsej' row, so it is read
+    # rather than summed. The region dimension does NOT: it lists the seven
+    # regions and nothing else, so those are summed. Getting this backwards
+    # either way doubles a figure or loses one, so each axis is decided by
+    # looking rather than by assuming.
+    ri = idx_of(regions, 'gjithsej', 'total')
+    vi = idx_of(measures, 'vizitor')
+    if vi is None:
+        return None
+    fi = idx_of(origins, 'të jasht', 'te jasht')
+    di = idx_of(origins, 'vendor')
+    region_rows = [ri] if ri is not None else list(range(len(regions)))
+
+    def at(pi, oi):
+        if oi is None:
+            return None
+        total, seen = 0.0, False
+        for r in region_rows:
+            v = vals[((pi * size[1] + r) * size[2] + oi) * size[3] + vi]
+            if v is not None:
+                total += float(v)
+                seen = True
+        return total if seen else None
+
+    foreign, domestic = {}, {}
+    for pi, p in enumerate(periods):
+        if 'M' not in p:
+            continue
+        ym = p.strip().replace('M', '-')
+        f, d = at(pi, fi), at(pi, di)
+        if f is not None:
+            foreign[ym] = float(f)
+        if d is not None:
+            domestic[ym] = float(d)
+    if not foreign:
+        return None
+    months = sorted(foreign)
+    return {'months': months,
+            'foreign_visitors': foreign,
+            'domestic_visitors': domestic,
+            'latest': months[-1],
+            'regions_summed': ri is None,
+            'note': 'Visitors by month, ASK tourism statistics, summed across the '
+                    'seven regions because the table publishes no national total. '
+                    'It counts guests in registered accommodation, so it misses '
+                    'anyone staying with family — which in Kosovo is most of the '
+                    'summer diaspora.'}
+
+
 def household_consumption(raw_dir):
     """Household final consumption expenditure, annual, at current prices.
 
