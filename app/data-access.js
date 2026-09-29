@@ -70,6 +70,8 @@
     getForeignPulse: function () { return (DB.levers || {}).foreign_pulse || null; },
     getRegional: function () { return DB.regional || null; },
     getAudit: function () { return DB.audit || null; },
+    getDecisions: function () { return DB.decisions || null; },
+    getGeoOpportunity: function () { return (DB.levers||{}).geo_opportunity || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
       return (DB.levers || {}).turnover_cross_check || null; },

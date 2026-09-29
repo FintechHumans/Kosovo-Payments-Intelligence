@@ -684,3 +684,60 @@ body.tool .back-summary{display:block}
 .au-clears strong{color:var(--ink)}
 
 @media (max-width:900px){ .au-rating{width:auto} }
+
+/* ======================= five decisions ======================= */
+/* The first screen. One number per decision, nothing competing for the eye. */
+.dc-headline{background:var(--ink);color:#fff;padding:var(--s7) var(--s6);
+  margin-bottom:var(--s6)}
+.dc-headline .label{color:var(--gold-soft)}
+.dc-headline h2{font-size:clamp(22px,3vw,32px);font-weight:600;letter-spacing:-.02em;
+  line-height:1.2;margin:var(--s3) 0 var(--s5);max-width:26ch}
+.dc-versus{display:flex;align-items:center;gap:var(--s5);flex-wrap:wrap;
+  padding:var(--s4) 0;border-top:1px solid rgba(255,255,255,.14);
+  border-bottom:1px solid rgba(255,255,255,.14)}
+.dc-side-v{font-family:var(--mono);font-size:clamp(24px,4vw,38px);font-weight:600;
+  letter-spacing:-.03em;color:rgba(255,255,255,.62)}
+.dc-side-lead .dc-side-v{color:var(--gold-soft)}
+.dc-side-k{font-size:12px;color:rgba(255,255,255,.55);line-height:1.45;
+  max-width:30ch;margin-top:4px}
+.dc-vs{font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  color:rgba(255,255,255,.4)}
+.dc-reading{font-size:14px;line-height:1.7;color:rgba(255,255,255,.86);
+  max-width:70ch;margin-top:var(--s4)}
+.dc-caveat{font-size:12px;line-height:1.6;color:rgba(255,255,255,.5);
+  max-width:70ch;margin-top:var(--s3)}
+
+.dc-grid{display:grid;gap:var(--s4)}
+.dc-card{display:flex;gap:var(--s5);border:1px solid var(--rule);
+  background:var(--surface);padding:var(--s5)}
+.dc-n{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--rule-strong);
+  line-height:1;flex:none;width:44px}
+.dc-body{flex:1;min-width:0}
+.dc-verb{font-size:11px;font-weight:700;letter-spacing:.14em;color:var(--gold);
+  display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.dc-conf{font-size:9.5px;letter-spacing:.08em;padding:2px 6px;border-radius:2px;
+  background:var(--surface-sunk);color:var(--ink-3);font-weight:600}
+.dc-high .dc-conf{background:rgba(20,99,74,.1);color:var(--pos)}
+.dc-medium .dc-conf{background:rgba(184,150,12,.12);color:var(--gold)}
+.dc-low .dc-conf{background:rgba(140,74,0,.1);color:var(--neg)}
+.dc-q{font-size:13px;font-weight:500;color:var(--ink-3);margin:6px 0 4px}
+.dc-a{font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.35;
+  max-width:44ch}
+.dc-fig{display:flex;align-items:baseline;gap:var(--s3);margin:var(--s4) 0;
+  padding:var(--s3) 0;border-top:1px solid var(--rule);
+  border-bottom:1px solid var(--rule)}
+.dc-v{font-family:var(--mono);font-size:26px;font-weight:600;letter-spacing:-.03em;
+  color:var(--purple,#230078)}
+.dc-u{font-size:12px;color:var(--ink-3)}
+.dc-basis,.dc-action,.dc-limit,.dc-needs{font-size:12.5px;line-height:1.6;
+  max-width:72ch;margin-top:7px}
+.dc-basis{color:var(--ink-2)} .dc-action{color:var(--ink)}
+.dc-limit,.dc-needs{color:var(--ink-3);font-size:12px}
+.dc-basis strong,.dc-action strong{color:var(--ink);font-weight:600}
+.dc-limit strong,.dc-needs strong{color:var(--ink-2);font-weight:600}
+
+@media (max-width:900px){
+  .dc-card{flex-direction:column;gap:var(--s3)}
+  .dc-n{width:auto}
+  .dc-versus{flex-direction:column;align-items:flex-start;gap:var(--s3)}
+}

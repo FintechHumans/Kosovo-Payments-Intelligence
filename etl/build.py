@@ -42,6 +42,8 @@ import verticals as VERT
 import opportunity as OPP
 import cockpit as CK
 import audit_report as AR
+import opportunity_geo as OG
+import decisions as DEC
 import levers as LV
 from audit_rules import KPI_REGISTRY, derive_kpi_status, PARSER_VERSION
 
@@ -1104,6 +1106,32 @@ def main():
                                  sec_year, VERT.atk_section_vertical),
     }
 
+    go = lever.get('geo_opportunity')
+    if go:
+        check('geo_declared_not_transacted', 'model', 'warning', not go['flagged'],
+              '%s declare turnover far above what their taxpayer base supports — '
+              'up to %.1f times the national median per taxpayer. That is turnover '
+              'booked at a registered office rather than transacted locally, so '
+              'they are flagged and excluded from the targeting ranking. Ranking '
+              'on declared turnover alone would have put a municipality of about '
+              'ten thousand people second in the country.'
+              % (' and '.join(go['flagged']) or 'No municipalities',
+                 max([m['concentration_ratio'] for m in go['municipalities']
+                      if m['declared_not_transacted']] or [0])),
+              table='core.fact_atk_turnover',
+              expected='transacted locally', actual='declared locally')
+
+        check('geo_pos_coverage', 'coverage', 'warning', False,
+              'A penetration gap can be computed for %d of %d municipalities, '
+              'covering %.0f%% of declared turnover. The other %d are ranked on '
+              'economic scale with the gap marked UNMEASURED rather than estimated '
+              'from the inputs that happen to exist.'
+              % (len(go['measured']), len(go['municipalities']),
+                 (go['measured_share_of_turnover'] or 0) * 100,
+                 go['unmeasured_count']),
+              table='core.fact_pos_geo_annual',
+              expected='38 municipalities', actual='%d cities' % len(go['measured']))
+
     if findex:
         check('regional_benchmark', 'ingest', 'info', True,
               'Regional benchmark from World Bank Findex, %s: one questionnaire '
@@ -1267,6 +1295,7 @@ def main():
     lever['acceptance_funnel'] = LV.acceptance_funnel(
         lever['acceptance_base'], pos_default)
     lever['concentration'] = LV.market_concentration(lever['bank_position'])
+    lever['geo_opportunity'] = OG.build(muni_sec_year, geo, lever['formation'])
 
     # ---- the acceptance denominator, and what it can and cannot carry
     ab = lever['acceptance_base']
@@ -1487,6 +1516,7 @@ def main():
     # The audit rates the payload, so it is built from the finished payload and
     # then folded back into it. Deriving it any earlier would rate a half-built
     # object and quietly disagree with what the report renders.
+    payload['decisions'] = DEC.build(lever, payload['meta'])
     payload['audit'] = AR.build(payload)
 
     with open(os.path.join(CURATED, 'dashboard.json'), 'w', encoding='utf-8') as f:
