@@ -1105,127 +1105,6 @@
   // =====================================================================
   // CONCLUSION — what the evidence adds up to
   // =====================================================================
-  function renderConclusion(host) {
-    const p = DA.getPenetration();
-    const cash = DA.getCashPool();
-    const cmix = DA.getCardMix();
-    const bm = DA.getBenchmarks();
-    const cap = DA.getRetailCapture();
-    const hr = DA.getHeadroom();
-
-    let h = '<header class="page-head"><h1>What this means</h1>' +
-      '<p class="q">The evidence, in order, and what it adds up to.</p></header>';
-
-    if (p) {
-      h += headline('What the evidence supports',
-        'Card spending is growing faster than the places that can take it.',
-        '<strong>The fact.</strong> Card value compounded at <strong>' +
-        (p.card_cagr * 100).toFixed(1) + '%</strong> a year against an economy growing ' +
-        '<strong>' + (p.economy_cagr * 100).toFixed(1) + '%</strong>, outgrowing retail ' +
-        'trade itself. <strong>What follows:</strong> the two sides move at different ' +
-        'speeds, so the measured constraint sits on the acceptance side rather than on ' +
-        'the amount being spent. <strong>What this does not establish:</strong> nothing ' +
-        'here measures demand — the report observes what was spent and where it could ' +
-        'be spent, never what anyone wanted.',
-        fig((p.card_cagr * 100).toFixed(1) + '%', 'card value CAGR', true) +
-        fig((p.economy_cagr * 100).toFixed(1) + '%', 'economy CAGR') +
-        (bm ? fig(U.pct(bm.levels[1].index, 0), 'of euro-area terminal density') : '') +
-        (cmix ? fig(U.pp(cmix.latest.credit_share_count - cmix.first.credit_share_count),
-                    'credit share of transactions') : ''),
-        '<span>Every figure below links to the page that establishes it.</span>');
-    }
-
-    const steps = [];
-    if (p) steps.push({
-      n: '01', t: 'The economy nearly doubled',
-      d: 'ATK declared turnover grew ' + p.economy_multiple.toFixed(2) + '× between ' +
-         p.first.year + ' and ' + p.latest.year + ', reaching ' + U.money(p.latest.turnover) + '.',
-      src: 'ATK', go: 'penetration' });
-    if (p) steps.push({
-      n: '02', t: 'Card payments grew far faster',
-      d: 'Card value grew ' + p.card_multiple.toFixed(2) + '× over the same years — ' +
-         p.card_faster_by.toFixed(1) + ' times the pace of the economy.',
-      src: 'BQK', go: 'penetration' });
-    if (p) steps.push({
-      n: '03', t: 'So penetration doubled, and is still small',
-      d: U.pct(p.penetration_first, 2) + ' of declared turnover settled on card in ' +
-         p.first.year + '; ' + U.pct(p.penetration_latest, 2) + ' in ' + p.latest.year +
-         '. ' + U.pct(p.still_elsewhere, 1) + ' still settles some other way.',
-      src: 'BQK ÷ ATK', go: 'penetration' });
-    if (cap) steps.push({
-      n: '04', t: 'It is displacement, not drift',
-      d: 'Card value grew ' + U.signedPct(cap.card_value_yoy) + ' against retail trade at ' +
-         U.signedPct(cap.retail_mean_yoy) + ', outgrowing ' + cap.outgrown + ' of ' +
-         cap.of + ' published retail activities. Cards are taking share, not riding growth.',
-      src: 'BQK vs ASK', go: 'penetration' });
-    if (cash) steps.push({
-      n: '05', t: 'The pool that remains is large and measurable',
-      d: U.money(cash.annualised_cash_pool) + ' a year is still withdrawn as cash, ' +
-         cash.latest.ratio.toFixed(2) + '× card spend — down from ' +
-         cash.first.ratio.toFixed(2) + '×. Each percentage point moved is ' +
-         U.money(cash.value_of_one_point) + ' of card turnover a year.',
-      src: 'BQK', go: 'pool' });
-    if (bm) steps.push({
-      n: '06', t: 'But acceptance is thin by European standards',
-      d: 'Kosovo has ' + U.pct(bm.levels[1].index, 0) + ' of euro-area terminal density ' +
-         'per inhabitant and ' + U.pct(bm.levels[0].index, 0) + ' of its card usage per ' +
-         'person, on the ECB’s own reference half-year.',
-      src: 'BQK vs ECB', go: 'position' });
-    if (hr && hr.rows.filter(function (r) { return r.terminals_to_median; }).length) {
-      const gap = hr.rows.reduce(function (a, r) { return a + (r.terminals_to_median || 0); }, 0);
-      steps.push({
-        n: '07', t: 'And uneven within the country',
-        d: 'Three of the seven cities BQK publishes sit below peer density against their ' +
-           'own local economy — about ' + gap + ' terminals of shortfall.',
-        src: 'BQK ÷ ATK ÷ ASK', go: 'coverage' });
-    }
-    if (cmix) steps.push({
-      n: '08', t: 'While the margin mix moves the wrong way',
-      d: 'Credit-function payments fell from ' + U.pct(cmix.first.credit_share_count, 1) +
-         ' to ' + U.pct(cmix.latest.credit_share_count, 1) + ' of transactions as volume ' +
-         'grew. Composition changes what each transaction earns even when counts rise.',
-      src: 'BQK', go: 'mix' });
-
-    h += sec('The argument', 'Each step rests on a published figure');
-    h += '<div class="paths" style="grid-template-columns:1fr">' +
-      steps.map(function (s) {
-        return '<button class="path" data-go="' + s.go + '" style="min-height:0">' +
-          '<span class="n">' + s.n + ' · ' + U.esc(s.src) + '</span>' +
-          '<h3>' + U.esc(s.t) + '</h3><p>' + U.esc(s.d) + '</p>' +
-          '<span class="go">See the evidence →</span></button>';
-      }).join('') + '</div></section>';
-
-    h += sec('What follows from it', 'Where public data stops being able to help');
-    h += '<div class="grid2">' +
-      concl('Coverage, not persuasion',
-        'Demand is compounding at ' + (p ? (p.card_cagr * 100).toFixed(0) : '~25') +
-        '% a year without intervention. The measurable constraint is where a card can ' +
-        'be presented — terminal density at a quarter of euro-area levels, and uneven ' +
-        'between cities relative to their own economies.') +
-      concl('Mix, not just volume',
-        'Transaction counts are rising while the credit share falls. Two banks can grow ' +
-        'the same volume and earn differently. Public data shows the shift; only ' +
-        'internal pricing data can size what it costs.') +
-      concl('The pool is the ceiling',
-        cash ? U.money(cash.annualised_cash_pool) + ' a year still leaves ATMs. Not all ' +
-               'of it could ever settle at a till — rent, wages and transfers pass ' +
-               'through cash too — so it bounds the opportunity rather than describing it.'
-             : 'Cash withdrawals bound the opportunity from above.') +
-      concl('Where this stops',
-        'No revenue or profit figure appears anywhere in this report. Merchant service ' +
-        'charges, interchange, scheme and processing fees, terminal-level activity and ' +
-        'merchant-level performance are published by nobody. Everything here sizes the ' +
-        'opportunity; pricing it needs internal data.') +
-      '</div></section>';
-
-    host.innerHTML = h;
-    $$('.path[data-go]', host).forEach(function (b) {
-      b.addEventListener('click', function () {
-        if (global.__gotoPage) global.__gotoPage(b.dataset.go);
-      });
-    });
-  }
-
   function concl(t, d) {
     return '<div class="card"><div class="card-b" style="padding-top:20px">' +
       '<h3 style="font-size:15px;font-weight:600;margin-bottom:8px">' + U.esc(t) + '</h3>' +
@@ -1660,7 +1539,6 @@
   global.OpsPages = { renderPool: renderPool, renderMix: renderMix,
                       renderPosition: renderPosition, renderCoverage: renderCoverage,
                       renderPenetration: renderPenetration,
-                      renderConclusion: renderConclusion,
                       renderFairShare: renderFairShare,
                       renderDemand: renderDemand,
                       renderOpportunity: renderOpportunity };

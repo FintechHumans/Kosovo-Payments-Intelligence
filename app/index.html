@@ -77,15 +77,9 @@
       <span class="s">Intelligence</span>
     </button>
 
-    <div class="rail-group">
-      <span class="label">Explore</span>
-      <div class="rail-nav" id="nav-primary"></div>
-    </div>
-
-    <div class="rail-group">
-      <span class="label">Assurance</span>
-      <div class="rail-nav secondary" id="nav-secondary"></div>
-    </div>
+    <!-- Groups are built from the page definitions, so adding or moving a
+         page does not mean editing markup in two places. -->
+    <div id="nav-groups"></div>
 
     <button class="back-summary" id="back-summary">← Summary</button>
 
@@ -161,6 +155,6 @@
 <script src="scenario.js?v=1.1"></script>
 <script src="explorer.js?v=1.1"></script>
 <script src="summary.js?v=1.3"></script>
-<script src="app.js?v=7.2"></script>
+<script src="app.js?v=7.3"></script>
 </body>
 </html>

@@ -20,68 +20,79 @@
     return Array.prototype.slice.call((r || document).querySelectorAll(s));
   };
 
+  // Grouped by the question a page answers, not by the dataset behind it.
+  // Two pages were removed rather than regrouped: "Where the money is" was a
+  // table of contents for a rail that already exists, and "What this means"
+  // repeated the arc that Five decisions now carries in actionable form.
+  const GROUPS = [
+    { key: 'decide',    label: 'Decide' },
+    { key: 'target',    label: 'Where and who' },
+    { key: 'market',    label: 'The market' },
+    { key: 'reference', label: 'Reference' },
+    { key: 'assurance', label: 'Assurance' }
+  ];
+
   const PAGES = [
     { id: 'decisions', n: '01', nav: 'Five decisions',    title: 'Five decisions',
       q: 'Where is the opportunity, how large, and what should we do?',
-      group: 'primary', filters: [] },
+      group: 'decide', filters: [] },
     { id: 'scenario', n: '02', nav: 'Scenario engine',    title: 'Scenario engine',
       q: 'What would a change in share, placement or activation be worth?',
-      group: 'primary', filters: [] },
+      group: 'decide', filters: [] },
     { id: 'cockpit',  n: '03', nav: 'Decision cockpit',   title: 'Decision cockpit',
       q: 'What is happening, how big is it, and how confident are we?',
-      group: 'primary', filters: [] },
-    { id: 'home',     n: '04', nav: 'Where the money is', title: 'Where the money is',
-      q: 'What is the opportunity, and which way is it moving?',
-      group: 'primary', filters: ['period', 'universe'] },
-    { id: 'penetration', n: '05', nav: 'Card intensity',  title: 'Card intensity of declared turnover',
-      q: 'How much of the economy actually settles on a card?',
-      group: 'primary', filters: [] },
-    { id: 'pool',     n: '06', nav: 'Cash & capture',     title: 'Cash and capture',
-      q: 'How much spending is still cash, and are cards taking it?',
-      group: 'primary', filters: [] },
-    { id: 'mix',      n: '07', nav: 'Mix & margin',       title: 'Mix and margin',
-      q: 'What is happening to the composition behind the volume?',
-      group: 'primary', filters: [] },
-    { id: 'explorer', n: '08', nav: 'Where to play',     title: 'Where to play',
+      group: 'decide', filters: [] },
+
+    { id: 'explorer', n: '04', nav: 'Where to play',      title: 'Where to play',
       q: 'Which sectors hold a municipality, and which municipalities hold a sector?',
-      group: 'primary', filters: [] },
-    { id: 'coverage', n: '09', nav: 'Coverage',           title: 'Coverage',
+      group: 'target', filters: [] },
+    { id: 'coverage', n: '05', nav: 'Coverage',           title: 'Coverage',
       q: 'Where does acceptance lag the economy around it?',
-      group: 'primary', filters: ['year', 'muni'] },
-    { id: 'position', n: '10', nav: 'Position',           title: 'Position',
-      q: 'Where does Kosovo sit against the euro area?',
-      group: 'primary', filters: [] },
-    { id: 'demand',   n: '11', nav: 'Product demand',    title: 'Product demand',
-      q: 'Which merchant markets are being stocked, and which are thinning?',
-      group: 'primary', filters: [] },
-    { id: 'opportunity', n: '12', nav: 'Merchant opportunity',
+      group: 'target', filters: ['year', 'muni'] },
+    { id: 'opportunity', n: '06', nav: 'Merchant opportunity',
       title: 'Merchant opportunity',
       q: 'Which merchant verticals can the evidence speak to?',
-      group: 'primary', filters: [] },
-    { id: 'fairshare', n: '13', nav: 'Fair share',        title: 'Fair share',
+      group: 'target', filters: [] },
+    { id: 'demand',   n: '07', nav: 'Product demand',     title: 'Product demand',
+      q: 'Which merchant markets are being stocked, and which are thinning?',
+      group: 'target', filters: [] },
+
+    { id: 'penetration', n: '08', nav: 'Card intensity',
+      title: 'Card intensity of declared turnover',
+      q: 'How much of the economy actually settles on a card?',
+      group: 'market', filters: [] },
+    { id: 'pool',     n: '09', nav: 'Cash & capture',     title: 'Cash and capture',
+      q: 'How much spending is still cash, and are cards taking it?',
+      group: 'market', filters: [] },
+    { id: 'mix',      n: '10', nav: 'Mix & margin',       title: 'Mix and margin',
+      q: 'What is happening to the composition behind the volume?',
+      group: 'market', filters: [] },
+    { id: 'position', n: '11', nav: 'Position',           title: 'Position',
+      q: 'Where does Kosovo sit against the euro area and the region?',
+      group: 'market', filters: [] },
+    { id: 'fairshare', n: '12', nav: 'Fair share',        title: 'Fair share',
       q: 'Who holds the terminals, and who carries the value?',
-      group: 'primary', filters: [] },
-    { id: 'conclusion', n: '14', nav: 'What this means', title: 'What this means',
-      q: 'The evidence, in order, and what it adds up to.',
-      group: 'primary', filters: [] },
-    { id: 'network',  n: '15', nav: 'POS network',        title: 'The POS network',
+      group: 'market', filters: [] },
+
+    { id: 'network',  n: '13', nav: 'POS network',        title: 'The POS network',
       q: 'How large is the network, how hard does it work, and where is it?',
-      group: 'secondary', filters: ['period', 'universe'] },
-    { id: 'payments', n: '16', nav: 'Payment behaviour',  title: 'Payment behaviour',
-      q: 'How are people paying?', group: 'secondary', filters: ['period'] },
-    { id: 'audit',    n: '17', nav: 'Audit report',       title: 'Data & decision audit',
+      group: 'reference', filters: ['period', 'universe'] },
+    { id: 'payments', n: '14', nav: 'Payment behaviour',  title: 'Payment behaviour',
+      q: 'How are people paying?', group: 'reference', filters: ['period'] },
+
+    { id: 'audit',    n: '15', nav: 'Audit report',       title: 'Data & decision audit',
       q: 'What holds up every source, measure, mapping and conclusion?',
-      group: 'secondary', filters: [] },
-    { id: 'quality',  n: '18', nav: 'Data quality',       title: 'Data quality',
-      q: 'Can I trust these numbers?', group: 'secondary', filters: [] },
-    { id: 'method',   n: '19', nav: 'Methodology',        title: 'Methodology',
-      q: 'How exactly was this calculated?', group: 'secondary', filters: [] }
+      group: 'assurance', filters: [] },
+    { id: 'quality',  n: '16', nav: 'Data quality',       title: 'Data quality',
+      q: 'Can I trust these numbers?', group: 'assurance', filters: [] },
+    { id: 'method',   n: '17', nav: 'Methodology',        title: 'Methodology',
+      q: 'How exactly was this calculated?', group: 'assurance', filters: [] }
   ];
   const PAGE = {};
   PAGES.forEach(function (p) { PAGE[p.id] = p; });
 
   const state = {
-    page: 'home', definition: null, period: null, comparePeriod: null,
+    page: 'decisions', definition: null, period: null, comparePeriod: null,
     compareOn: false, year: null, municipality: 'All', advanced: false
   };
 
@@ -170,166 +181,6 @@
   // =====================================================================
   // 01 — HOME
   // =====================================================================
-  function renderHome() {
-    const host = $('#page-home');
-    const def = DA.getDefinition(state.definition);
-    const ov = DA.getExecutiveOverview(state.definition, state.period);
-    const sig = ov && ov.signal;
-    if (!ov || !ov.current) {
-      host.innerHTML = U.emptyState('No data', 'This series has no observations.');
-      return;
-    }
-    const cur = ov.current;
-    const srcId = sourceIdFor(state.definition);
-    const lead = sig && sig.usage_minus_infra_pp > 0;
-
-    const cash = DA.getCashPool();
-    const cmix = DA.getCardMix();
-    const cap = DA.getRetailCapture();
-    const bm = DA.getBenchmarks();
-    const hr = DA.getHeadroom();
-
-    let h = '';
-
-    // ---- lead with the thesis: the shift is real, and most of it is still ahead
-    const pen = DA.getPenetration();
-    if (pen || cash) {
-      const L = cash && cash.latest;
-      h += '<section class="home-hero">' +
-        '<span class="label">Kosovo payments · ' +
-        (pen ? pen.first.year + '–' + pen.latest.year : U.monthLabel(L.year_month)) +
-        '</span>' +
-        '<h1>' + (pen
-          ? 'Cards are winning — and ' + U.pct(pen.still_elsewhere, 0) +
-            ' of the economy is still up for it'
-          : U.money(cash.annualised_cash_pool) + ' a year is still withdrawn as cash') +
-        '</h1>';
-
-      if (pen) {
-        h += '<p class="lede">The declared economy grew <strong>' +
-          pen.economy_multiple.toFixed(2) + '×</strong> in ' + pen.years +
-          ' years. Card value grew <strong>' + pen.card_multiple.toFixed(2) +
-          '×</strong>. Penetration doubled from ' + U.pct(pen.penetration_first, 2) +
-          ' to <strong>' + U.pct(pen.penetration_latest, 2) + '</strong> of turnover' +
-          (cash ? ', yet <strong>' + U.money(cash.annualised_cash_pool) +
-                  '</strong> a year still leaves ATMs' : '') +
-          '. Demand is compounding on its own; what limits it is where a card can be ' +
-          'used and what each payment earns.</p>';
-      }
-
-      h += '<div class="home-figs">' +
-        (pen ? fig(U.pct(pen.penetration_latest, 2), 'of declared turnover on card, ' +
-                   pen.latest.year, true) : '') +
-        (pen ? fig('+' + (pen.card_cagr * 100).toFixed(0) + '% / +' +
-                   (pen.economy_cagr * 100).toFixed(0) + '%', 'card value against economy, a year') : '') +
-        (cash ? fig(U.money(cash.value_of_one_point), 'a year per point moved from cash') : '') +
-        (bm ? fig(U.pct(bm.levels[1].index, 0), 'of euro-area terminal density') : '') +
-        '</div>' +
-        '<div class="home-meta"><span>ATK · BQK · ASK · ECB</span>' +
-        '<span>·</span><span>Latest ' + U.monthLabel(cur.year_month) + '</span>' +
-        '<span>·</span><button id="home-src">How this is measured</button></div>' +
-        '</section>';
-    }
-
-    // ---- the levers, each sized
-    h += '<div class="paths">' +
-      path('02', 'Card intensity',
-        pen ? U.pct(pen.penetration_first, 2) + ' of turnover settled on card in ' +
-              pen.first.year + '; ' + U.pct(pen.penetration_latest, 2) + ' in ' +
-              pen.latest.year + '. The one series that needs all three institutions.'
-            : 'How much of the economy settles on a card.', 'penetration') +
-      path('03', 'Cash & capture',
-        cash ? 'A ' + U.money(cash.annualised_cash_pool) + ' pool, and cards are ' +
-               'outgrowing retail trade by ' + (cap ? U.pp(cap.gap_pp) : 'a wide margin') + '.'
-             : 'How much spending is still settled in cash.', 'pool') +
-      path('04', 'Mix & margin',
-        cmix ? 'Credit share has moved ' +
-               U.pp(cmix.latest.credit_share_count - cmix.first.credit_share_count) +
-               ' — composition shifts margin even when volume grows.'
-             : 'Credit against debit, contactless, and the emerging channels.', 'mix') +
-      path('05', 'Coverage',
-        hr && hr.rows.filter(function (r) { return r.terminals_to_median; }).length
-          ? 'Three cities sit below peer density; the shortfall is about ' +
-            hr.rows.reduce(function (a, r) { return a + (r.terminals_to_median || 0); }, 0) +
-            ' terminals.'
-          : 'Where acceptance sits against the local economy.', 'coverage') +
-      path('06', 'Position',
-        bm ? 'Kosovo runs at ' + U.pct(bm.levels[0].index, 0) + ' of euro-area usage per ' +
-             'person and is growing several times faster.'
-           : 'Kosovo against the euro area.', 'position') +
-      path('07', 'What this means',
-        'The evidence in order, and the conclusion it supports.', 'conclusion') +
-      '</div>';
-
-    // ---- what public data cannot price
-    h += '<div class="notice" style="border-left-color:var(--purple)">' +
-      '<h5>What this sizes, and what it does not</h5>' +
-      '<p>Everything here measures the <strong>opportunity</strong>: how large each pool ' +
-      'is, which way it is moving, and where acceptance lags the economy. It does not ' +
-      'price it. Merchant service charges, interchange, scheme and processing fees and ' +
-      'terminal-level activity are not published by anyone, so no revenue or profit ' +
-      'figure appears in this report. Those require internal data.</p></div>';
-
-    // ---- essential KPIs only
-    h += '<div class="kpis">' +
-      U.kpiTile({ id: 'pos_transaction_count', label: 'Transactions', value: cur.tx_count,
-        display: U.compact(cur.tx_count), exact: U.exact(cur.tx_count), source: true,
-        foot: U.deltaSpan(cur.tx_yoy) + ' year on year' }) +
-      U.kpiTile({ id: 'pos_transaction_value', label: 'Value', value: cur.tx_value,
-        display: U.money(cur.tx_value), exact: U.exactMoney(cur.tx_value), source: true,
-        foot: U.deltaSpan(cur.value_yoy) + ' year on year' }) +
-      U.kpiTile({ id: 'pos_terminals', label: 'POS terminals', value: cur.terminal_stock,
-        display: U.compact(cur.terminal_stock), exact: U.exact(cur.terminal_stock),
-        source: true, unavailable: 'Not published for this series',
-        foot: U.isNil(cur.terminal_stock) ? '' : U.deltaSpan(cur.pos_yoy) + ' year on year' }) +
-      U.kpiTile({ id: 'average_ticket', label: 'Average payment', value: cur.avg_ticket,
-        display: cur.avg_ticket ? '€' + cur.avg_ticket.toFixed(2) : null,
-        exact: U.exactMoney(cur.avg_ticket), source: true, foot: 'value ÷ transactions' }) +
-      '</div>';
-
-    // ---- pulse
-    const pulse = DA.getMarketPulse(state.definition);
-    if (pulse.length) {
-      h += '<div class="pulse"><div class="pulse-h">' +
-        '<span class="label label-gold">What moved</span>' +
-        '<span style="font-size:11.5px;color:var(--ink-3)">' + sig.months +
-        ' months, against the same months a year earlier</span></div>' +
-        pulse.map(function (p) {
-          return '<div class="pulse-item ' + p.dir + '"><span class="arrow">' +
-            (p.dir === 'up' ? '↑' : p.dir === 'down' ? '↓' : '→') + '</span>' +
-            '<span class="txt">' + U.esc(p.text) + '</span>' +
-            '<span class="val">' + U.esc(p.value) + '</span></div>';
-        }).join('') + '</div>';
-    }
-
-    host.innerHTML = h;
-
-    $$('.path', host).forEach(function (b) {
-      b.addEventListener('click', function () { show(b.dataset.go); });
-    });
-    $('#home-src', host).addEventListener('click', function () {
-      U.sourceDrawer(DA.getProvenance('transactions_per_average_pos', srcId, {
-        title: 'How the market signal is measured',
-        period: sig ? sig.months + ' months to ' + U.monthLabel(sig.through) : null,
-        comparison: 'The complete months of the latest year against the same calendar ' +
-                    'months a year earlier. A part-year is never compared with a full year.',
-        universe: def.universe }));
-    });
-    wireKpis(host, { sourceId: srcId, period: cur.year_month, universe: def.universe,
-                     rows: defRows(def, cur.year_month) });
-    countUpBand(host);
-  }
-
-  function fig(v, k, lead) {
-    if (!v) return '';
-    return '<div class="home-fig' + (lead ? ' lead' : '') + '"><div class="v">' + U.esc(v) +
-      '</div><div class="k">' + U.esc(k) + '</div></div>';
-  }
-  function path(n, title, body, go) {
-    return '<button class="path" data-go="' + go + '"><span class="n">' + n + '</span>' +
-      '<h3>' + U.esc(title) + '</h3><p>' + U.esc(body) + '</p>' +
-      '<span class="go">Open →</span></button>';
-  }
   function countUpBand(host) {
     $$('.kpi .v', host).forEach(function (v) {
       const m = v.textContent.match(/^€?(-?[\d.]+)(bn|m|K)?$/);
@@ -869,9 +720,7 @@
     explorer: function () { window.Explorer.render($('#page-explorer')); },
     cockpit: function () { window.Cockpit.render($('#page-cockpit')); },
     audit: function () { window.AuditReport.render($('#page-audit')); },
-    home: renderHome,
     penetration: function () { OPS.renderPenetration($('#page-penetration'), state); },
-    conclusion: function () { OPS.renderConclusion($('#page-conclusion'), state); },
     pool: function () { OPS.renderPool($('#page-pool'), state); },
     mix: function () { OPS.renderMix($('#page-mix'), state); },
     coverage: function () { OPS.renderCoverage($('#page-coverage'), state); },
@@ -954,8 +803,18 @@
     state.year = DA.atkYears().slice(-1)[0];
 
     // nav
+    const groupHost = $('#nav-groups');
+    GROUPS.forEach(function (g) {
+      const wrap = document.createElement('div');
+      wrap.className = 'rail-group';
+      wrap.innerHTML = '<span class="label">' + U.esc(g.label) + '</span>' +
+        '<div class="rail-nav' + (g.key === 'assurance' ? ' secondary' : '') +
+        '" id="nav-' + g.key + '"></div>';
+      groupHost.appendChild(wrap);
+    });
+
     PAGES.forEach(function (p) {
-      const host = $(p.group === 'primary' ? '#nav-primary' : '#nav-secondary');
+      const host = $('#nav-' + p.group);
       const b = document.createElement('button');
       b.dataset.page = p.id;
       b.innerHTML = '<span class="i">' + p.n + '</span><span>' + U.esc(p.nav) + '</span>';
@@ -966,7 +825,7 @@
       s.id = 'page-' + p.id;
       $('#canvas').appendChild(s);
     });
-    $('#brand').addEventListener('click', function () { show('home'); });
+    $('#brand').addEventListener('click', function () { show('decisions'); });
 
     // filters
     fillSelect($('#f-period'), DA.getPeriods(state.definition).map(function (p) {
