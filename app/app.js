@@ -1057,10 +1057,16 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    // The source may be remote, so resolve it before init reads the payload.
+    // __loadSource never rejects: it falls back to data.js and says so.
+    const ready = (window.__loadSource ? window.__loadSource()
+                                       : Promise.resolve(null));
+    ready.then(function () {
     try { init(); }
     catch (err) {
       if (window.console) console.error('init failed', err);
       if (window.__bootFail) window.__bootFail(err && (err.message || err));
     }
+    });
   });
 })();

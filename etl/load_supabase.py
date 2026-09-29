@@ -20,6 +20,7 @@ failure part-way rolls back rather than leaving a half-loaded warehouse.
 
 Nothing here writes a credential to disk, and the password is not printed.
 """
+import json
 import os
 import re
 import sys
@@ -31,6 +32,48 @@ SEED = os.path.join(BASE, 'data', 'curated', 'seed.sql')
 def redact(url):
     """A connection string safe to print: everything but the password."""
     return re.sub(r'://([^:]+):[^@]+@', r'://\1:***@', url or '')
+
+
+DASHBOARD = os.path.join(BASE, 'data', 'curated', 'dashboard.json')
+
+# Keys already served by the SQL views. Writing them twice would create two
+# answers to the same question, which is the one thing a warehouse must not do.
+SERVED_BY_VIEWS = {'quality', 'reconciliation', 'coverage', 'kpi_status',
+                   'kpi_registry', 'definitions', 'sources', 'source_versions'}
+
+
+def load_derived(conn):
+    """Store the computed analytical output for the browser to read.
+
+    Everything the ETL works out in Python and SQL does not: the levers, the
+    cockpit, the regional benchmark, the vertical taxonomy. One row per payload
+    key, replaced wholesale rather than patched, so the table can never hold a
+    mixture of two builds.
+    """
+    if not os.path.exists(DASHBOARD):
+        print('\nno dashboard.json — skipping derived output')
+        return
+    with open(DASHBOARD, encoding='utf-8') as f:
+        payload = json.load(f)
+    version = (payload.get('meta') or {}).get('parser_version', 'unknown')
+
+    rows = []
+    for key, value in payload.items():
+        if key in SERVED_BY_VIEWS:
+            continue
+        n = len(value) if isinstance(value, (list, dict)) else None
+        rows.append((key, json.dumps(value, ensure_ascii=False), version, n))
+
+    with conn.cursor() as cur:
+        cur.execute('begin')
+        cur.execute('delete from analytics.derived_output')
+        cur.executemany(
+            'insert into analytics.derived_output '
+            '(key, payload, parser_version, row_count) values (%s, %s, %s, %s)',
+            rows)
+        cur.execute('commit')
+    print('\nderived output: %d keys (%s)'
+          % (len(rows), ', '.join(sorted(r[0] for r in rows)[:6]) + ' …'))
 
 
 def main():
@@ -61,6 +104,7 @@ def main():
         conn.autocommit = True
         with conn.cursor() as cur:
             cur.execute(sql)
+        load_derived(conn)
         with conn.cursor() as cur:
             cur.execute("""
                 select 'core.fact_atk_turnover',      count(*) from core.fact_atk_turnover
