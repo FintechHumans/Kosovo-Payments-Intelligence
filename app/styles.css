@@ -796,3 +796,35 @@ body.tool .back-summary{display:block}
 .sc-k-input{background:rgba(140,74,0,.1);color:var(--neg)}
 
 @media (max-width:900px){ .sc-controls{grid-template-columns:1fr} }
+
+/* ======================= where to play explorer ======================= */
+.ex-controls{display:flex;gap:var(--s4);align-items:flex-end;flex-wrap:wrap;
+  padding:var(--s4) var(--s5);border:1px solid var(--rule);
+  background:var(--surface);margin-bottom:var(--s4)}
+.ex-sel{display:flex;flex-direction:column;gap:4px;font-size:11px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3)}
+.ex-sel select{min-width:210px;max-width:100%;padding:8px 10px;
+  border:1px solid var(--rule-strong);background:var(--surface);
+  font-size:13px;color:var(--ink);text-transform:none;letter-spacing:0}
+.ex-profile{border:1px solid var(--rule);background:var(--surface-sunk);
+  padding:var(--s5)}
+.ex-flagged{border-color:var(--neg)}
+.ex-p-row{display:flex;gap:var(--s6);flex-wrap:wrap}
+.ex-p-row .k{display:block;font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink-3)}
+.ex-p-row .v{display:block;font-family:var(--mono);font-size:17px;font-weight:600;
+  letter-spacing:-.02em;margin-top:3px}
+.ex-p-row .v em{font-family:var(--sans);font-size:12px;font-weight:400;
+  font-style:normal;color:var(--ink-3)}
+.ex-warn{font-size:12.5px;color:var(--neg);line-height:1.6;margin-top:var(--s4);
+  max-width:78ch}
+.ex-warn strong{font-weight:600}
+.ex-note{font-size:12.5px;color:var(--ink-3);line-height:1.6;margin-top:var(--s4);
+  max-width:78ch}
+.ex-addr{font-size:10.5px;font-weight:600;letter-spacing:.04em;padding:3px 7px;
+  border-radius:2px;white-space:nowrap}
+.ex-addr.ex-pos{background:rgba(20,99,74,.1);color:var(--pos)}
+.ex-addr.ex-mid{background:rgba(184,150,12,.14);color:var(--gold)}
+.ex-addr.ex-low{background:var(--surface-sunk);color:var(--ink-3)}
+.ex-addr.ex-warn{background:rgba(140,74,0,.1);color:var(--neg)}
+@media (max-width:900px){ .ex-sel select{min-width:0;width:100%} .ex-sel{flex:1 1 100%} }
