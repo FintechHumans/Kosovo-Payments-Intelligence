@@ -10,7 +10,7 @@
                fallback, and the only thing needed to host this on a static
                server with no backend at all.
 
-     supabase  api.derived, one row per payload key, written by
+     supabase  public.kpi_derived, one row per payload key, written by
                etl/load_supabase.py. The SQL views beside it serve the
                statistical core; this serves the operational layer that is
                computed in Python and has no natural SQL form.
@@ -32,9 +32,11 @@
   const CONFIG = {
     // Set mode to 'supabase' once etl/load_supabase.py has run. Until then the
     // static payload is authoritative and this file is a no-op.
-    mode: 'static',
-    url: '',          // e.g. https://<ref>.supabase.co
-    anonKey: '',      // publishable anon key — never the service_role key
+    mode: 'supabase',
+    url: 'https://pfxrbdftbefcnfnvnazj.supabase.co',
+    // Publishable key. It identifies the project and grants nothing:
+    // RLS is on everywhere and only the api schema has select.
+    anonKey: 'sb_publishable_bAypYcR8qLkOEQFMguzQSw_EEc1va2H',
     timeoutMs: 6000
   };
 
@@ -52,13 +54,27 @@
   // the last good figures instead of to blanks.
   function merge(rows) {
     const base = global.KPI_DATA || {};
-    let n = 0;
+    // The build stamp the file was written with, captured before anything is
+    // overwritten. A remote row that predates it means the database was loaded
+    // from an older build, and a partial load would then serve two builds at
+    // once without saying so.
+    const fileStamp = (base.meta || {}).generated_at || null;
+    let n = 0, remoteStamp = null;
     rows.forEach(function (r) {
       if (!r || !r.key || r.payload === null || r.payload === undefined) return;
+      if (r.key === 'meta' && r.payload && r.payload.generated_at)
+        remoteStamp = r.payload.generated_at;
       base[r.key] = r.payload;
       n++;
     });
     global.KPI_DATA = base;
+    if (fileStamp && remoteStamp && fileStamp !== remoteStamp) {
+      global.KPI_STALE = { file: fileStamp, remote: remoteStamp };
+      if (global.console) console.warn(
+        '[source] the database was loaded from a different build than data.js ' +
+        '(' + remoteStamp + ' against ' + fileStamp + '). Run ' +
+        'etl/load_supabase.py to bring them back into step.');
+    }
     return n;
   }
 
@@ -73,7 +89,7 @@
                              CONFIG.timeoutMs);
 
     return fetch(CONFIG.url.replace(/\/+$/, '') +
-                 '/rest/v1/derived?select=key,payload,parser_version,built_at', {
+                 '/rest/v1/kpi_derived?select=key,payload,parser_version,built_at', {
         headers: { apikey: CONFIG.anonKey,
                    Authorization: 'Bearer ' + CONFIG.anonKey },
         signal: ctl ? ctl.signal : undefined
@@ -87,7 +103,10 @@
         const n = merge(rows);
         const built = rows[0] && rows[0].built_at;
         global.KPI_SOURCE = {
-          mode: 'supabase', detail: 'api.derived · ' + n + ' keys',
+          mode: 'supabase',
+          detail: 'kpi_derived · ' + n + ' keys' +
+                  (global.KPI_STALE ? ' · MIXED BUILDS' : ''),
+          stale: global.KPI_STALE || null,
           builtAt: built, parserVersion: rows[0] && rows[0].parser_version
         };
         return global.KPI_SOURCE;

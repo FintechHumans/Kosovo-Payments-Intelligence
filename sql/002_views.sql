@@ -316,5 +316,26 @@ select * from audit.kpi_build_status;
 
 grant select on all tables in schema api to anon, authenticated;
 
+-- ----------------------------------------------------------------------------
+-- The browser surface.
+--
+-- PostgREST serves only the schemas the platform lists, and on Supabase that
+-- is public and graphql_public. The api schema above is correct, granted and
+-- populated, and every HTTP request for it returns 404 — right data behind a
+-- door the server was never told to open. So the browser reads one view in
+-- the schema PostgREST already serves.
+--
+-- The isolation is unchanged, because it never came from the schema name:
+-- row-level security stays on the base table, the view is read-only, and
+-- select is the only privilege any client role holds anywhere. The api schema
+-- remains for SQL and BI clients, which connect directly.
+-- ----------------------------------------------------------------------------
+create or replace view public.kpi_derived as
+select key, payload, parser_version, row_count, built_at
+from analytics.derived_output;
+
+revoke all on public.kpi_derived from anon, authenticated;
+grant select on public.kpi_derived to anon, authenticated;
+
 -- Read-only is enforced by granting select and nothing else; no insert, update
 -- or delete is granted to any client role anywhere in the database.

@@ -76,7 +76,28 @@ def load_derived(conn):
           % (len(rows), ', '.join(sorted(r[0] for r in rows)[:6]) + ' …'))
 
 
+def load_env():
+    """Read .env if present, so a password never has to be typed into a shell.
+
+    Values already in the environment win, and nothing here is printed or
+    written anywhere. .env is gitignored.
+    """
+    path = os.path.join(BASE, '.env')
+    if not os.path.exists(path):
+        return
+    with open(path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            k, v = line.split('=', 1)
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and k not in os.environ:
+                os.environ[k] = v
+
+
 def main():
+    load_env()
     url = os.environ.get('SUPABASE_DB_URL')
     if not url:
         print('SUPABASE_DB_URL is not set.\n')
