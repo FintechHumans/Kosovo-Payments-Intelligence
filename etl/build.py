@@ -43,6 +43,7 @@ import opportunity as OPP
 import cockpit as CK
 import audit_report as AR
 import opportunity_geo as OG
+import cash_geography as CGEO
 import decisions as DEC
 import scenario as SCN
 import levers as LV
@@ -1107,6 +1108,45 @@ def main():
                                  sec_year, VERT.atk_section_vertical),
     }
 
+    # Derived levers read other levers, so they are built here -- immediately
+    # after the dict and BEFORE any check runs. They used to be assigned near
+    # the payload instead, several hundred lines below the checks that read
+    # them, which made three checks silent no-ops: the flag on turnover
+    # declared rather than transacted, the terminal-coverage warning, and the
+    # money-through-machines anomaly. All three computed correctly and none
+    # reached the quality register.
+    lever['intensity_denominators'] = LV.card_intensity_denominators(
+        lever['penetration'], household)
+    lever['acceptance_funnel'] = LV.acceptance_funnel(
+        lever['acceptance_base'], pos_default)
+    lever['concentration'] = LV.market_concentration(lever['bank_position'])
+    lever['geo_opportunity'] = OG.build(muni_sec_year, geo, lever['formation'])
+    lever['cash_geography'] = CGEO.build(geo, lever['geo_opportunity'])
+
+    # A check that silently does not run is worse than a missing one: the
+    # register looks complete. Fail loudly if a lever a check depends on is
+    # still unset by the time checks begin.
+    for _k in ('intensity_denominators', 'acceptance_funnel', 'concentration',
+               'geo_opportunity', 'cash_geography'):
+        if _k not in lever:
+            raise RuntimeError('lever %r is read by a check but never assigned' % _k)
+
+    cg = lever.get('cash_geography')
+    if cg and cg.get('exceeds'):
+        check('cash_geography_anomaly', 'model', 'warning', False,
+              '%s moves more value through ATMs and POS terminals than it '
+              'declares in turnover — %.0f%% of it, %.1f times the median of the '
+              'seven published cities, on the smallest terminal share of any. '
+              'The combined series cannot attribute the excess: heavy cash '
+              'withdrawal, a catchment wider than the city, cross-border traffic '
+              'and under-declared trade all read the same way. It marks where to '
+              'look, not what will be found.'
+              % (' and '.join(cg['exceeds']), cg['leader']['ratio'] * 100,
+                 cg['leader_multiple'] or 0),
+              table='core.fact_pos_geo_annual',
+              expected='below declared turnover',
+              actual='%.0f%% of it' % (cg['leader']['ratio'] * 100))
+
     go = lever.get('geo_opportunity')
     if go:
         check('geo_declared_not_transacted', 'model', 'warning', not go['flagged'],
@@ -1289,14 +1329,6 @@ def main():
                   % cc['max_gap_pp'],
                   table='core.fact_atk_turnover',
                   expected='independent measurement', actual='shared source')
-
-    # These three read other levers, so they are built once the dict exists.
-    lever['intensity_denominators'] = LV.card_intensity_denominators(
-        lever['penetration'], household)
-    lever['acceptance_funnel'] = LV.acceptance_funnel(
-        lever['acceptance_base'], pos_default)
-    lever['concentration'] = LV.market_concentration(lever['bank_position'])
-    lever['geo_opportunity'] = OG.build(muni_sec_year, geo, lever['formation'])
 
     # ---- the acceptance denominator, and what it can and cannot carry
     ab = lever['acceptance_base']

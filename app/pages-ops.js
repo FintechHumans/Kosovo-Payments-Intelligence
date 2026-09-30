@@ -733,6 +733,48 @@
         '</section>';
     }
 
+    // Money moving through machines against the economy each city declares.
+    // The combined ATM-and-POS series blocks productivity by geography, but it
+    // still carries this one ratio, and one city breaks the pattern hard.
+    const cg = DA.getCashGeography();
+    if (cg) {
+      h += sec('Money through the machines',
+               'ATM and POS value against declared turnover · ' + cg.year) +
+        '<div class="card"><div class="card-b" id="cov-cash"></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="tbl-wrap"><table><thead><tr>' +
+        '<th>City</th><th class="n">Through machines</th><th class="n">Declared turnover</th>' +
+        '<th class="n">Ratio</th><th class="n">Per terminal</th>' +
+        '<th class="n">Terminal share</th></tr></thead><tbody>' +
+        cg.rows.map(function (r) {
+          const tone = r.band === 'EXCEEDS' ? 'var(--neg)'
+                     : r.band === 'ELEVATED' ? 'var(--gold)' : 'var(--ink)';
+          return '<tr><td class="strong">' + U.esc(r.city) +
+            (r.denominator_inflated
+              ? ' <span class="note">denominator inflated</span>' : '') + '</td>' +
+            '<td class="n">' + U.money(r.atm_pos_value) + '</td>' +
+            '<td class="n">' + U.money(r.turnover) + '</td>' +
+            '<td class="n" style="font-weight:600;color:' + tone + '">' +
+              U.pct(r.ratio, 0) + '</td>' +
+            '<td class="n">' + U.money(r.value_per_terminal) + '</td>' +
+            '<td class="n">' + (r.pos_share_pct || 0).toFixed(1) + '%</td></tr>';
+        }).join('') + '</tbody></table></div></div>' +
+        '<div class="card" style="margin-top:12px"><div class="card-b" ' +
+        'style="padding-top:20px">' +
+        '<h3 style="font-size:15px;font-weight:600;margin-bottom:8px">' +
+        U.esc(cg.exceeds.join(' and ')) + ' breaks the pattern</h3>' +
+        '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.7;max-width:64ch">' +
+        U.esc(cg.reading) + '</p></div></div>' +
+        disclosure('Why this ratio is allowed where productivity is not',
+          '<p>' + U.esc(cg.note) + '</p>' +
+          '<p>Splitting the numerator into cash and card is exactly what the ' +
+          'source will not support, which is why POS productivity by geography ' +
+          'is blocked elsewhere in this report. This ratio needs no split: it ' +
+          'compares all measured money movement against all declared activity.</p>' +
+          '<p><strong>The denominator has its own flaw.</strong> ' +
+          U.esc(cg.caveat) + '</p>') +
+        '</section>';
+    }
+
     const fm = DA.getFormation();
     if (fm) {
       const top = fm.rows.slice(0, 12);
@@ -835,6 +877,25 @@
     // "+1,432%" for a place with many registrations and few closures means
     // nothing. Net formation as a bar says the same thing and says it plainly;
     // the two components stay in the tooltip.
+    if (cg && $('#cov-cash', host)) {
+      $('#cov-cash', host).appendChild(C.hbars(
+        cg.rows.map(function (r) {
+          return { label: r.city, value: r.ratio * 100,
+            color: r.band === 'EXCEEDS' ? C.colors.neg
+                 : r.band === 'ELEVATED' ? C.colors.gold : C.colors.purpleSoft,
+            tip: function () {
+              return { name: r.city, value: U.pct(r.ratio, 0) + ' of declared turnover',
+                delta: U.money(r.atm_pos_value) + ' through machines · ' +
+                       (r.pos_share_pct || 0).toFixed(1) + '% of terminals' }; } };
+        }), { w: 660, rowH: 30,
+              fmt: function (v) { return v.toFixed(0) + '%'; },
+              pad: { t: 6, r: 74, b: 6, l: 130 } }));
+      $('#cov-cash', host).insertAdjacentHTML('beforeend',
+        '<div class="sum-legend"><span>Value through ATMs and POS terminals, as a ' +
+        'share of declared turnover</span><span><i style="background:' +
+        C.colors.neg + '"></i>Exceeds declared turnover</span></div>');
+    }
+
     if (fm && $('#cov-formation', host)) {
       const med = fm.rows.map(function (r) { return r.churn; })
         .filter(function (v) { return v != null; }).sort(function (a, b) {

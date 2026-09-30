@@ -74,6 +74,7 @@
     getScenario: function () { return DB.scenario || null; },
     getMuniSectorYear: function () { return DB.atk_muni_sector_year || null; },
     getLayers: function () { return DB.layers || null; },
+    getCashGeography: function () { return (DB.levers||{}).cash_geography || null; },
     getGeoOpportunity: function () { return (DB.levers||{}).geo_opportunity || null; },
     getDoganaCoverage: function () { return DB.dogana_coverage || null; },
     getTurnoverCrossCheck: function () {
